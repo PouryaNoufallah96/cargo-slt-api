@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SLT.Api/SLT.Api.csproj" />
+  <Project Path="SLT.Domain/SLT.Domain.csproj" />
+  <Project Path="SLT.Services/SLT.Services.csproj" />
+  <Project Path="SLT.Utilities/SLT.Utilities.csproj" />
+</Solution>
