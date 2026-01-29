@@ -8,6 +8,7 @@ using SLT.Services._BlockChain.DTOs.Updates;
 using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Order.DTOs.Updates;
 using SLT.Services._Price.DTOs.Settings;
+using System.Security.Cryptography;
 using Utilities.Exceptions.Common;
 using Utilities.Services.Contracts;
 using static Utilities.Constants.RegisterMode;
@@ -366,6 +367,7 @@ namespace SLT.Services._Order
 
             var newInvoice = new Invoice
             {
+                InvoiceId = GenerateBytes32HexId(),
                 TokenSybmol = tokenData.Name,
                 TokenAddress = tokenData.Address,
                 USDTAmount = order.TotalAmount,
@@ -420,6 +422,7 @@ namespace SLT.Services._Order
 
                 var invoice = new Invoice
                 {
+                    InvoiceId = GenerateBytes32HexId(),
                     TokenSybmol = tokenData.Name,
                     TokenAddress = tokenData.Address,
                     USDTAmount = invoiceUpdate.Amount,
@@ -547,6 +550,16 @@ namespace SLT.Services._Order
             return tokenData;
         }
 
-        
+
+        public static string GenerateBytes32HexId()
+        {
+            var buffer = new byte[32];
+            RandomNumberGenerator.Fill(buffer);
+
+            return BitConverter.ToString(buffer)
+                .Replace("-", "")
+                .ToLowerInvariant();
+        }
+
     }
 }

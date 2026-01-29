@@ -9,6 +9,6 @@ namespace SLT.Services._Order.DTOs.Updates
 {
     public class InvoiceIdUpdate
     {
-       [StringInputValidation(maxLength:32,minLength:(32))] public string InvoiceId { get; set; }
+       [StringInputValidation(maxLength:64,minLength:(64))] public string InvoiceId { get; set; }
     }
 }
