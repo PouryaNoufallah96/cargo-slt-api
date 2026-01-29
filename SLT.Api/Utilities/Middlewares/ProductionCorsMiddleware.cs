@@ -21,8 +21,8 @@ namespace SLT.Api.Utilities.Middlewares
 
             var allowedOrigins = new[]
             {
-            "https://s.com",
-            "https://api.s.com",
+            "https://slt.paytomoon.com",
+            "https://api.paytomoon.com",
             "https://app.s.com",
             "https://mp.s.com",
             "http://localhost:5132",
@@ -62,7 +62,7 @@ namespace SLT.Api.Utilities.Middlewares
             httpContext.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             httpContext.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
             httpContext.Response.Headers.Append("Content-Security-Policy",
-                "frame-ancestors 'self' https://s.com https://panel.s.com https://api.s.com https://app.s.com");
+                "frame-ancestors 'self' https://slt.paytomoon.com https://panel.s.com https://api.s.com https://app.s.com");
 
             httpContext.Response.Headers.Remove("server");
 

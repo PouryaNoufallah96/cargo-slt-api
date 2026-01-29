@@ -1,4 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
+using SLT.Services._BlockChain._BlockChainWebSocket.DTOs;
+using SLT.Services._BlockChain.DTOs.Settings;
+using SLT.Services._Price.DTOs.Settings;
 
 
 namespace SLT.Api.Utilities.Configurations
@@ -6,11 +9,11 @@ namespace SLT.Api.Utilities.Configurations
     public static class ControllerServiceCollectionExtensions
     {
         public static void AddSettings(this IServiceCollection services, IConfiguration configuration)
-        {            
+        {
 
-            //services.RegisterSetting<AvailableTokensSettings>(configuration.GetSection(nameof(AvailableTokensSettings)));         
-            //services.RegisterSetting<BlockchainWebSocketSetting>(configuration.GetSection(nameof(BlockchainWebSocketSetting)));         
-            //services.RegisterSetting<BlockChainSettings>(configuration.GetSection(nameof(BlockChainSettings)));         
+            services.RegisterSetting<AvailableTokensSettings>(configuration.GetSection(nameof(AvailableTokensSettings)));
+            services.RegisterSetting<BlockchainWebSocketSetting>(configuration.GetSection(nameof(BlockchainWebSocketSetting)));
+            services.RegisterSetting<BlockChainSettings>(configuration.GetSection(nameof(BlockChainSettings)));
         }
 
         private static void RegisterSetting<TSettings>(this IServiceCollection services, IConfigurationSection configuration)

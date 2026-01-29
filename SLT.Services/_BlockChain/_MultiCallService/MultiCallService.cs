@@ -2,7 +2,7 @@
 using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Web3;
 using SLT.Services._BlockChain._MultiCallService.DTOs;
-using static AutoShield.Utilities.Constants.RegisterMode;
+using static Utilities.Constants.RegisterMode;
 
 namespace SLT.Services._BlockChain._MultiCallService
 {

@@ -144,6 +144,10 @@ namespace SLT.Services._TransactionLog
              .Where(h => h.EventType == BlockchainEventType.TransactionConfirmed)
              .OrderByDescending(b => b)
              .FirstOrDefaultAsync();
+            if(lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
 
             return new BigInteger(lastBlock.BlockNumber);
         }

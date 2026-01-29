@@ -49,7 +49,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             ILogger<BlockChainEventBackgroundService> logger,
             BlockchainWebSocketSetting settings)
         {
-            _scopeFactory = scopeFactory;
             this.blockChainSettings = blockChainSettings;
             transactionLogService = _transactionLogService;
             _logger = logger;
@@ -307,14 +306,39 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 try
                 {
-                    var _web3Client = new Web3(blockChainSettings.RpcUrl);
-
-                    var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                    lock (_blockLock)
+                    var _web3Client = new Web3(blockChainSettings.RpcUrl2);
+                    try
                     {
-                        _lastProcessedBlock = latestBlockNumber;
-                        return latestBlockNumber;
+
+                        var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                        lock (_blockLock)
+                        {
+                            _lastProcessedBlock = latestBlockNumber;
+                            return latestBlockNumber;
+                        }
+
                     }
+                    catch (Exception)
+                    {
+                        try
+                        {
+                            _web3Client = new Web3(blockChainSettings.RpcUrl);
+                            var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                            lock (_blockLock)
+                            {
+                                _lastProcessedBlock = latestBlockNumber;
+                                return latestBlockNumber;
+                            }
+                        }
+                        catch (Exception)
+                        {
+
+                            throw;
+                        }
+                      
+                      
+                    }
+                    
 
                 }
                 catch (Exception e)

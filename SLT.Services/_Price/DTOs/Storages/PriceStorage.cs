@@ -2,7 +2,7 @@
 using SLT.Services._Price._Hubs;
 using SLT.Services._Price.DTOs.Results;
 using System.Collections.Concurrent;
-using static AutoShield.Utilities.Constants.RegisterMode;
+using static Utilities.Constants.RegisterMode;
 
 namespace SLT.Services._Price.DTOs.Storages
 {

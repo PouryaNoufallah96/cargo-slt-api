@@ -2,6 +2,8 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using SLT.Api.Utilities.Configurations;
 using SLT.Api.Utilities.Middlewares;
+using SLT.Services._Price._Hubs;
+using SLT.Services._TransactionLog._Hub;
 using System.Text.Json.Serialization;
 using Utilities.Configuration;
 
@@ -81,5 +83,8 @@ app.UseAuthorization();
 
 app.UseEndpoints();
 
+
+app.MapHub<PriceHub>("/hubs/prices");
+app.MapHub<WalletNotifyHub>("/hubs/NotifyWallet");
 
 app.Run();

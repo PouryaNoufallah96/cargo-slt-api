@@ -21,3 +21,4 @@ namespace SLT.Services._TransactionLog._Hub
         }
 
     }
+}
