@@ -386,6 +386,7 @@ namespace SLT.Services._Order
             };
 
             var registerHash = await _blockChainService.CreateQuickInvoiceAsync(newInvoice.InvoiceId, newInvoice.TokenAddress, newInvoice.USDTAmount);
+            if (registerHash == null) throw new BadRequestException("There is a problem, try later!");
 
             newInvoice.RegisterHash = registerHash;
             await _invoiceRepository.InsertOneAsync(newInvoice);
@@ -456,6 +457,8 @@ namespace SLT.Services._Order
 
             var txHash = await _blockChainService
                 .CreateMultipleInvoicesAsync(blockchainInputs);
+
+            if (txHash == null) throw new BadRequestException("There is a problem, try later!");
 
             if (string.IsNullOrEmpty(txHash))
                 throw new Exception("Blockchain registration failed.");

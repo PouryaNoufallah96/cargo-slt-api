@@ -17,7 +17,7 @@ namespace SLT.Api.Controllers.V1
     {
 
         [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = true)]
+        //[Authorize(RequireActiveUser = true)]
         [SwaggerOperation(Summary = "Create quick order", Tags = ["Order"])]
         public async Task<OrderFullResult> CreateQuickOrderAsync(
             CreateQuickInvoiceUpdate update)
