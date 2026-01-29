@@ -4,7 +4,7 @@ using Utilities.MongoDatabase.Documents;
 namespace SLT.Domain.Collections
 {
 
-    [MonjoCollectionName("Invoices")]
+    [MonjoCollectionName("Orders")]
     public class Order : BaseDocument
     {
         public string OrderId { get; set; } = Guid.NewGuid().ToString("N");
