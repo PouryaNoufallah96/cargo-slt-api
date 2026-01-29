@@ -23,6 +23,10 @@
 		<PackageReference Include="System.Reactive" Version="6.0.1" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="_Invoice\" />
+	</ItemGroup>
+
 
 
 </Project>
