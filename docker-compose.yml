@@ -1,0 +1,74 @@
+version: "3"
+services:
+  slt.paytomoon.com:
+    image: slt.api
+    container_name: slt.paytomoon.com
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3009:80"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+    environment:
+      - ASPNETCORE_URLS=http://+
+      - FirewallSettings__Rules__1__Regex=^(.*)$$
+      - FirewallSettings__Rules__1__IPAddresses__0=144.76.177.153
+      - FirewallSettings__Rules__1__Policy=Allow
+      - FirewallSettings__Rules__0__Regex=^(.*)$$
+      - FirewallSettings__Rules__0__IPAddresses__0=*
+      - FirewallSettings__Rules__0__Policy=Allow
+
+      # Database
+      - MonjoSettings__ConnectionString=$mongodb_connection
+      - MonjoSettings__DatabaseName=$database_name
+
+      # JWT
+      - JwtServiceSettings__Issuer=$jwtservicesettings_issuer
+      - JwtServiceSettings__Audience=$jwtservicesettings_audience
+      - JwtServiceSettings__SignatureKey=$jwtservicesettings_signature_key
+      - JwtServiceSettings__EncryptionKey=$jwtservicesettings_encryption_key
+      - JwtServiceSettings__ExpiresAfter=$jwtservicesettings_expires_after
+
+      # JWT Client Info
+      - JwtServiceSettings__ClientInfo__web_mainsets=$jwtservicesettings_clientinfo_web_value
+      - JwtServiceSettings__ClientInfo__app_mainappful=$jwtservicesettings_clientinfo_app_value
+
+      # Blockchain
+      - BlockChainSettings__RpcUrl=$blockchainsettings_rpc_url
+      - BlockChainSettings__RpcUrl2=$blockchainsettings_rpc_url2
+      - BlockChainSettings__ContractAddress=$blockchainsettings_contract_address
+      - BlockChainSettings__PrivateKey=$blockchainsettings_private_key
+      - BlockChainSettings__PublicAddress=$blockchainsettings_public_address
+      - BlockChainSettings__ChainId=$blockchainsettings_chain_id
+      - BlockChainSettings__TransactionTimeoutSeconds=$blockchainsettings_transaction_timeout_seconds
+      - BlockChainSettings__DefaultGasLimit=$blockchainsettings_default_gas_limit
+      - BlockChainSettings__DefaultGasPriceGwei=$blockchainsettings_default_gas_price_gwei
+      - BlockChainSettings__MinGasPriceGwei=$blockchainsettings_min_gas_price_gwei
+      - BlockChainSettings__MaxGasPriceGwei=$blockchainsettings_max_gas_price_gwei
+
+      # Blockchain WebSocket
+      - BlockchainWebSocketSetting__WsUrl=$blockchainwebsocketsetting_ws_url
+      - BlockchainWebSocketSetting__WsUrl2=$blockchainwebsocketsetting_ws_url2
+      - BlockchainWebSocketSetting__ContractAddress=$blockchainwebsocketsetting_contract_address
+      - BlockchainWebSocketSetting__ReconnectInterval=$blockchainwebsocketsetting_reconnect_interval
+      - BlockchainWebSocketSetting__MaxReconnectAttempts=$blockchainwebsocketsetting_max_reconnect_attempts
+      - BlockchainWebSocketSetting__HeartbeatInterval=$blockchainwebsocketsetting_heartbeat_interval
+      - BlockchainWebSocketSetting__ConnectionTimeout=$blockchainwebsocketsetting_connection_timeout
+      - BlockchainWebSocketSetting__SubscriptionTimeout=$blockchainwebsocketsetting_subscription_timeout
+
+      # Application Pool Settings -> Applications[0]
+      - ApplicationPoolSettings__Applications__0__ApplicationId=$applicationpoolsettings_applications_0_application_id
+      - ApplicationPoolSettings__Applications__0__PreSharedKey=$applicationpoolsettings_applications_0_pre_shared_key
+      - ApplicationPoolSettings__Applications__0__MasterSignature=$applicationpoolsettings_applications_0_master_signature
+
+      # Application Pool Settings -> Applications[1]
+      - ApplicationPoolSettings__Applications__1__ApplicationId=$applicationpoolsettings_applications_1_application_id
+      - ApplicationPoolSettings__Applications__1__PreSharedKey=$applicationpoolsettings_applications_1_pre_shared_key
+      - ApplicationPoolSettings__Applications__1__MasterSignature=$applicationpoolsettings_applications_1_master_signature
+
+      # Application Pool Settings -> Applications[2]
+      - ApplicationPoolSettings__Applications__2__ApplicationId=$applicationpoolsettings_applications_2_application_id
+      - ApplicationPoolSettings__Applications__2__PreSharedKey=$applicationpoolsettings_applications_2_pre_shared_key
+      - ApplicationPoolSettings__Applications__2__MasterSignature=$applicationpoolsettings_applications_2_master_signature
+
+    
