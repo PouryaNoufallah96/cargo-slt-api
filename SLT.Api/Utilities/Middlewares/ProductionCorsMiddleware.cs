@@ -26,6 +26,7 @@ namespace SLT.Api.Utilities.Middlewares
             "https://app.s.com",
             "https://mp.s.com",
             "http://localhost:5132",
+            "http://localhost:5191",
             "http://localhost:3000",
             "http://192.168.100.5:3000",
             "null",
