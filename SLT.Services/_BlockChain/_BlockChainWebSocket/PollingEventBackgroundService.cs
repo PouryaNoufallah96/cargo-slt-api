@@ -126,7 +126,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-
         private async Task PollMissingLogsAsync(CancellationToken cancellationToken)
         {
             var _web3Client = new Web3(_settings.RpcUrl);
