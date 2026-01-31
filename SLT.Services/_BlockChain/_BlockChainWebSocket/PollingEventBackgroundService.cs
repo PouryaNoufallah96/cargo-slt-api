@@ -128,14 +128,14 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         private async Task PollMissingLogsAsync(CancellationToken cancellationToken)
         {
-            var _web3Client = new Web3(_settings.RpcUrl);
+            var _web3Client = new Web3(_settings.RpcUrl2);
             BigInteger latestBlock = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
             if (_lastProcessedBlock >= latestBlock) return;
 
             const int blockChunk = 2000;
             BigInteger fromBlock = _lastProcessedBlock;
-          
+
             while (fromBlock <= latestBlock)
             {
                 BigInteger toBlock = BigInteger.Min(fromBlock + blockChunk - 1, latestBlock);
@@ -170,7 +170,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                             {
                                 await CreateInvoicePaidLogAsync(log, paid, cancellationToken);
                                 continue;
-                            }                         
+                            }
                         }
                         catch (Exception ex)
                         {
