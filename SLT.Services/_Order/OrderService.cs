@@ -348,6 +348,57 @@ namespace SLT.Services._Order
 
 
         /// <summary>
+        /// use for get report
+        /// </summary>
+        /// <param name="walletAddress"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public async Task<OrderReportResult> GetOrderReportAsync(string walletAddress)
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new ArgumentException("Wallet address is invalid.");
+
+            var orders = await _orderRepository.AsQueryable()
+                .Where(o => o.OwnerWallet.ToLower() == walletAddress.ToLower())
+                .ToListAsync();
+
+            var pendingOrders = orders.Count(o => o.State == OrderState.Pending);
+            var doneOrders = orders.Count(o => o.State == OrderState.Completed);
+            var totalOrders = orders.Count();
+
+            var orderProgress = totalOrders == 0
+                ? 0
+                : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
+
+            var invoices = await _invoiceRepository.AsQueryable()
+                .Where(i => i.OwnerWallet.ToLower() == walletAddress.ToLower())
+                .ToListAsync();
+
+            var totalInvoices = invoices.Count;
+            var paidInvoices = invoices.Count(i => i.State == InvoiceState.Completed);
+            var pendingInvoices = invoices.Count(i => i.State == InvoiceState.Pending);
+
+            var invoiceProgress = totalInvoices == 0
+                ? 0
+                : Math.Round((decimal)paidInvoices / totalInvoices * 100, 2);
+
+            return new OrderReportResult
+            {
+                TotalInvoiceCount = totalInvoices,
+                PendingOrderCount = pendingOrders,
+                DoneOrderCount = doneOrders,
+                OrderProgress = orderProgress,
+
+                InvoiceCount = totalInvoices,
+                PaidInvoiceCount = paidInvoices,
+                PendingInvoiceCount = pendingInvoices,
+                InvoiceProgress = invoiceProgress
+            };
+        }
+
+
+
+        /// <summary>
         /// use for create quick invoice
         /// </summary>
         /// <param name="order"></param>
@@ -561,5 +612,6 @@ namespace SLT.Services._Order
                 .ToLowerInvariant();
         }
 
+       
     }
 }

@@ -86,5 +86,13 @@ namespace SLT.Api.Controllers.V1
                 WalletAddress
             );
         }
+
+        [HttpPost("[action]")]
+        [Authorize(RequireActiveUser = false)]
+        [SwaggerOperation(Summary = "Get Orders Reports", Tags = ["Order"])]
+        public async  Task<OrderReportResult> GetOrderReportAsync()
+        {
+           return await _orderService.GetOrderReportAsync(WalletAddress);
+        }
     }
 }

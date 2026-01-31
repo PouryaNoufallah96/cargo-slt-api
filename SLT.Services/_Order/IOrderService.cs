@@ -1,6 +1,5 @@
 ﻿using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Order.DTOs.Updates;
-using Utilities.DTOs;
 
 namespace SLT.Services._Order
 {
@@ -11,6 +10,9 @@ namespace SLT.Services._Order
         Task<OrderFullResult> CreateMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
         Task<OrderListResult> GetOrderListAsync(GetPendingOrderListUpdate update, string walletAddress);
         Task<OrderFullResult> GetOrderDetailAsync(OrderIdUpdate update, string walletAddress);
+        Task<OrderReportResult> GetOrderReportAsync(string walletAddress);  
+
+
 
         Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update);
         Task<bool> SeenWalletAsync(InvoiceIdUpdate update,string walletAddress);
