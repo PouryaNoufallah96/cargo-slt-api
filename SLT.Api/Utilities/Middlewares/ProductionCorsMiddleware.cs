@@ -28,6 +28,7 @@ namespace SLT.Api.Utilities.Middlewares
             "http://localhost:5132",
             "http://localhost:5191",
             "http://localhost:3000",
+            "http://localhost:5173",
             "http://192.168.100.5:3000",
             "null",
             ""
