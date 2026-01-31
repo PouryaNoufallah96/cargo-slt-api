@@ -14,6 +14,7 @@ namespace SLT.Api.Utilities.Configurations
             services.RegisterSetting<AvailableTokensSettings>(configuration.GetSection(nameof(AvailableTokensSettings)));
             services.RegisterSetting<BlockchainWebSocketSetting>(configuration.GetSection(nameof(BlockchainWebSocketSetting)));
             services.RegisterSetting<BlockChainSettings>(configuration.GetSection(nameof(BlockChainSettings)));
+            services.RegisterSetting<CallPriceSettings>(configuration.GetSection(nameof(CallPriceSettings)));
         }
 
         private static void RegisterSetting<TSettings>(this IServiceCollection services, IConfigurationSection configuration)

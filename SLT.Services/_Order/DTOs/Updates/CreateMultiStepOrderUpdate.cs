@@ -12,7 +12,7 @@
      
     public class MultiStepInvoiceUpdate : CreateQuickInvoiceUpdate
     {
-        public DateOnly? ActivationDate { get; set; } = null;
+        public DateOnly ActivationDate { get; set; } 
     }
 
 }

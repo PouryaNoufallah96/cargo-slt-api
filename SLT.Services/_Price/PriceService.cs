@@ -14,7 +14,7 @@ namespace SLT.Services._Price
         AvailableTokensSettings _availableTokenDatas,
         CallPriceSettings _callPriceSettings,
        ILogger<PriceService> logger,
-        PriceStorage _priceStorage) : IPriceService, ISingletonDependency
+        PriceStorage _priceStorage) : IPriceService, IScopedDependency
     {
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly ILogger<PriceService> _logger = logger;
@@ -62,7 +62,6 @@ namespace SLT.Services._Price
             }
             catch (Exception ex)
             {
-                //Console.WriteLine($"Error fetching price in RZ for {tokenName.ToUpper()}: {ex.Message}");
                 return await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
             }
         }
