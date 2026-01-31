@@ -57,7 +57,7 @@ namespace SLT.Services._Order
             catch (Exception ex)
             {
                 SentrySdk.CaptureMessage($"Error creating quick invoice for order ex : {ex.Message}");
-                await _orderRepository.DeleteByIdAsync(newOrder.OrderId);
+                await _orderRepository.DeleteByIdAsync(newOrder.Id);
                 throw new BadRequestException("Please try later!");
             }
         }
@@ -109,7 +109,7 @@ namespace SLT.Services._Order
             catch (Exception ex)
             {
                 SentrySdk.CaptureMessage($"Error creating multi-step invoices for order ex : {ex.Message}");
-                await _orderRepository.DeleteByIdAsync(newOrder.OrderId);
+                await _orderRepository.DeleteByIdAsync(newOrder.Id);
                 throw new BadRequestException("Please try later!");
             }
 
