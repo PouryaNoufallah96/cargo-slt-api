@@ -7,7 +7,7 @@ namespace SLT.Domain.Collections
     [MonjoCollectionName("Orders")]
     public class Order : BaseDocument
     {
-        public string OrderId { get; set; } = Guid.NewGuid().ToString("N");
+        public string OrderId { get; set; } 
         public string TransferId { get; set; }
 
         public string OwnerWallet { get; set; }

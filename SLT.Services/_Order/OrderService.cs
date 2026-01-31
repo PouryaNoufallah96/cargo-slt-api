@@ -34,6 +34,7 @@ namespace SLT.Services._Order
         {
             var newOrder = new Order
             {
+                OrderId = Guid.NewGuid().ToString("N"),
                 OwnerWallet = walletAddress,
                 PayerWallet = null,
                 SeenBy = [],
@@ -86,6 +87,7 @@ namespace SLT.Services._Order
 
             var newOrder = new Order
             {
+                OrderId =  Guid.NewGuid().ToString("N"),
                 OwnerWallet = walletAddress,
                 PayerWallet = null,
                 SeenBy = [],
