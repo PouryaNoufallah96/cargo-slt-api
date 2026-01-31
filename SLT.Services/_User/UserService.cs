@@ -76,7 +76,7 @@ namespace SLT.Services._User
 
             var userAuthData = ValidateNonce(update.Nonce, update.WalletAddress);
 
-            var message = $"Please sign this message to authenticate with SLT {update.Nonce}";
+            var message = $"Please sign this message to authenticate with SLT: {update.Nonce}";
             VerifySignature(message, update.Signature, userAuthData.WalletAddress);
 
             var user = await GetOrCreateUserAsync(userAuthData.WalletAddress);
