@@ -15,7 +15,6 @@ using static Utilities.Constants.RegisterMode;
 namespace SLT.Services._BlockChain._BlockChainWebSocket
 {
     public class PollingEventBackgroundService(
-        BlockChainSettings blockChainSettings,
         ITransactionLogService transactionLogService,
         ILogger<PollingEventBackgroundService> _logger,
         BlockChainSettings _settings
@@ -78,7 +77,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 try
                 {
-                    var _web3Client = new Web3(blockChainSettings.RpcUrl2);
+                    var _web3Client = new Web3(_settings.RpcUrl2);
                     try
                     {
 
@@ -94,7 +93,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     {
                         try
                         {
-                            _web3Client = new Web3(blockChainSettings.RpcUrl);
+                            _web3Client = new Web3(_settings.RpcUrl);
                             var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                             lock (_blockLock)
                             {
