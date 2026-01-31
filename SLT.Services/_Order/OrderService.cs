@@ -208,7 +208,7 @@ namespace SLT.Services._Order
 
             if (update.ListType == OrderListType.Sent)
             {
-                query = query.Where(o => o.OwnerWallet.ToLower() != null && o.PayerWallet.ToLower() == walletAddress.ToLower());
+                query = query.Where(o => o.OwnerWallet.ToLower() != null && o.OwnerWallet.ToLower() == walletAddress.ToLower());
             }
             else
             {
