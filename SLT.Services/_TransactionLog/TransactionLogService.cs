@@ -117,6 +117,7 @@ namespace SLT.Services._TransactionLog
                 {
                     var shortInvoiceId = log.InvoiceId.Length > 10 ? txHash[..10] : txHash;
                     await _hubContext.Clients.Group(ownerWallet).SendAsync("PaymentMessage", $"Your Invoice {shortInvoiceId}... has been successfully Paid.");
+                    await _hubContext.Clients.Group(log.Payer).SendAsync("PaymentMessage", $"You successfully paid Invoice {shortInvoiceId}...");
                 }
                 catch (Exception)
                 {

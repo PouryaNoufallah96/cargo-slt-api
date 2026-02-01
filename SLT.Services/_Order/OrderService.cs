@@ -131,6 +131,8 @@ namespace SLT.Services._Order
                 .Where(q => q.InvoiceId.ToLower() == invoiceId.ToLower() && q.State == InvoiceState.Pending)
                 .FirstOrDefaultAsync();
 
+            if(invoice == null) return null;
+
             invoice.PaymentHash = hash;
             invoice.PayMoment = DateTime.UtcNow;
             invoice.PayerWallet = payerWallet;
