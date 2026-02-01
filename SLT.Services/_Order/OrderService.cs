@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
+using Org.BouncyCastle.Asn1.X509;
 using SLT.Domain.Collections;
 using SLT.Domain.Repositories.Contracts;
 using SLT.Services._BlockChain;
@@ -47,11 +48,12 @@ namespace SLT.Services._Order
 
             };
 
+
             await _orderRepository.InsertOneAsync(newOrder);
             try
             {
                 var invoiceResult = await CreateQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description);
-                return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder);
+                return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
 
             }
             catch (Exception ex)
@@ -104,7 +106,7 @@ namespace SLT.Services._Order
             {
                 var invoiceResults = await CreateMultiStepInvoicesAsync(newOrder, update.Invoices);
 
-                return ConvertToReslut(invoiceResults, newOrder);
+                return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
             }
             catch (Exception ex)
             {
@@ -298,11 +300,15 @@ namespace SLT.Services._Order
             
             var invoices = await query.ToListAsync();
 
+            var type = order.OwnerWallet.ToLower() == walletAddress.ToLower()
+                ? OwnershipType.Owner
+                : OwnershipType.Payer;
+
             var invoiceResults = invoices
-                .Select(i => ConvertToReslut(i))
+                .Select(i => ConvertToReslut(i, type))
                 .ToList();
 
-            return ConvertToReslut(invoiceResults, order);
+            return ConvertToReslut(invoiceResults, order, type);
         }
 
 
@@ -312,13 +318,17 @@ namespace SLT.Services._Order
         /// <param name="update"></param>
         /// <returns></returns>
         /// <exception cref="NotFoundException"></exception>
-        public async Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update)
+        public async Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update,string walletAddress)
         {
             var invoice =  await _invoiceRepository.AsQueryable()
                 .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
                 .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
 
-            return ConvertToReslut(invoice);
+            var type = invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
+               ? OwnershipType.Owner
+               : OwnershipType.Payer;
+
+            return ConvertToReslut(invoice, type);
         }
 
 
@@ -421,7 +431,7 @@ namespace SLT.Services._Order
             var newInvoice = new Invoice
             {
                 InvoiceId = GenerateBytes32HexId(),
-                TokenSybmol = tokenData.Name,
+                TokenSymbol = tokenData.Name,
                 TokenAddress = tokenData.Address,
                 USDTAmount = order.TotalAmount,
                 USDTAmountInWei = _blockChainService.ConvertToWei(order.TotalAmount, 18).ToString(),
@@ -445,7 +455,7 @@ namespace SLT.Services._Order
 
             newInvoice.RegisterHash = registerHash;
             await _invoiceRepository.InsertOneAsync(newInvoice);
-            return ConvertToReslut(newInvoice);
+            return ConvertToReslut(newInvoice,OwnershipType.Owner);
         }
 
 
@@ -477,7 +487,7 @@ namespace SLT.Services._Order
                 var invoice = new Invoice
                 {
                     InvoiceId = GenerateBytes32HexId(),
-                    TokenSybmol = tokenData.Name,
+                    TokenSymbol = tokenData.Name,
                     TokenAddress = tokenData.Address,
                     USDTAmount = invoiceUpdate.Amount,
                     USDTAmountInWei = _blockChainService
@@ -525,8 +535,10 @@ namespace SLT.Services._Order
 
             await _invoiceRepository.InsertManyAsync(invoices);
 
-            return invoices.Select(ConvertToReslut).ToList();
+            return invoices.Select(invoice => ConvertToReslut(invoice, OwnershipType.Owner)).ToList();
         }
+
+
 
 
         /// <summary>
@@ -534,7 +546,7 @@ namespace SLT.Services._Order
         /// </summary>
         /// <param name="invoice"></param>
         /// <returns></returns>
-        private InvoiceResult ConvertToReslut(Invoice invoice)
+        private InvoiceResult ConvertToReslut(Invoice invoice,OwnershipType type)
         {
             return new InvoiceResult
             {
@@ -544,7 +556,7 @@ namespace SLT.Services._Order
                 OwnerWallet = invoice.OwnerWallet,
                 PayerWallet = invoice.PayerWallet,
                 OrderId = invoice.OrderId,
-                TokenSybmol = invoice.TokenSybmol,
+                TokenSymbol = invoice.TokenSymbol,
                 TokenAddress = invoice.TokenAddress,
                 USDTAmount = invoice.USDTAmount,
                 USDTAmountInWei = invoice.USDTAmountInWei,
@@ -557,9 +569,45 @@ namespace SLT.Services._Order
                 RegisterHash = invoice.RegisterHash,
                 PaymentHash = invoice.PaymentHash,
                 ActivateDate = invoice.ActivateDate,
+                OwnershipType = type
             };
 
         }
+
+        ///// <summary>
+        ///// use for convert to result
+        ///// </summary>
+        ///// <param name="invoice"></param>
+        ///// <returns></returns>
+        //private InvoiceResult ConvertToReslut(Invoice invoice,string walletAddress)
+        //{
+        //    return new InvoiceResult
+        //    {
+        //        CreatedMoment = invoice.CreatedMoment,
+        //        ModifiedMoment = invoice.ModifiedMoment,
+        //        InvoiceId = invoice.InvoiceId,
+        //        OwnerWallet = invoice.OwnerWallet,
+        //        PayerWallet = invoice.PayerWallet,
+        //        OrderId = invoice.OrderId,
+        //        TokenSymbol = invoice.TokenSymbol,
+        //        TokenAddress = invoice.TokenAddress,
+        //        USDTAmount = invoice.USDTAmount,
+        //        USDTAmountInWei = invoice.USDTAmountInWei,
+        //        Desctiption = invoice.Desctiption,
+        //        TokenAmountAtPayment = invoice.TokenAmountAtPayment,
+        //        TokenAmountWeiAtPayment = invoice.TokenAmountWeiAtPayment,
+        //        TokenPriceAtPayment = invoice.TokenPriceAtPayment,
+        //        State = invoice.State,
+        //        PayMoment = invoice.PayMoment,
+        //        RegisterHash = invoice.RegisterHash,
+        //        PaymentHash = invoice.PaymentHash,
+        //        ActivateDate = invoice.ActivateDate,
+        //        OwnershipType = invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
+        //            ? OwnershipType.Owner
+        //            : OwnershipType.Payer
+        //    };
+
+        //}
 
 
 
@@ -569,7 +617,7 @@ namespace SLT.Services._Order
         /// <param name="invoiceResults"></param>
         /// <param name="order"></param>
         /// <returns></returns>
-        private OrderFullResult ConvertToReslut(List<InvoiceResult> invoiceResults, Order order)
+        private OrderFullResult ConvertToReslut(List<InvoiceResult> invoiceResults, Order order , OwnershipType type)
         {
             return new OrderFullResult
             {
@@ -586,6 +634,7 @@ namespace SLT.Services._Order
                 PaymentDay = order.PaymentDay,
                 TransferId = order.TransferId,
                 Invoices = invoiceResults,
+                OwnershipType = type
             };
         }
 

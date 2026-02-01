@@ -14,7 +14,7 @@ namespace SLT.Services._Order
 
 
 
-        Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update);
+        Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update, string walletAddress);
         Task<bool> SeenWalletAsync(InvoiceIdUpdate update,string walletAddress);
 
 

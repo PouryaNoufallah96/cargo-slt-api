@@ -71,7 +71,7 @@ namespace SLT.Api.Controllers.V1
         public async Task<InvoiceResult> GetInvoiceDetailAsync(
             InvoiceIdUpdate update)
         {
-            return await _orderService.GetInvoiceDetailAsync(update);
+            return await _orderService.GetInvoiceDetailAsync(update,WalletAddress);
         }
 
 

@@ -11,7 +11,7 @@ namespace SLT.Domain.Collections
         public string OwnerWallet { get; set; }
         public string PayerWallet { get; set; }
         public string OrderId { get; set; }
-        public string TokenSybmol { get; set; }
+        public string TokenSymbol { get; set; }
         public string TokenAddress { get; set; }
         public decimal USDTAmount { get; set; }
         public string USDTAmountInWei { get; set; }
@@ -20,7 +20,6 @@ namespace SLT.Domain.Collections
         public decimal? TokenAmountAtPayment { get; set; }
         public string? TokenAmountWeiAtPayment { get; set; }
         public decimal? TokenPriceAtPayment { get; set; }
-
 
         public InvoiceState State { get; set; } = InvoiceState.Pending;
         public DateTime? PayMoment { get; set; } = null;
