@@ -344,12 +344,18 @@ namespace SLT.Services._Order
             var invoice = await _invoiceRepository.AsQueryable()
               .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
               .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
-        
+
+            if (invoice.OwnerWallet.ToLower() == walletAddress.ToLower())
+                throw new BadRequestException("You are Owner of this invoice!");
+
             var order = await _orderRepository.AsQueryable()
                 .Where(o => o.OrderId.ToLower() == invoice.OrderId.ToLower())
                 .FirstOrDefaultAsync() ?? throw new NotFoundException("Order not found!");
 
-           if(order.SeenBy.Contains(walletAddress.ToLower()))
+            if (order.OwnerWallet.ToLower() == walletAddress.ToLower())
+                throw new BadRequestException("You are Owner of this Order!");
+
+            if (order.SeenBy.Contains(walletAddress.ToLower()))
                 return true;
 
             order.SeenBy.Add(walletAddress.ToLower());
