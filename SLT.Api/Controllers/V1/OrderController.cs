@@ -22,6 +22,7 @@ namespace SLT.Api.Controllers.V1
         public async Task<OrderFullResult> CreateQuickOrderAsync(
             CreateQuickInvoiceUpdate update)
         {
+
             return await _orderService.CreateQuickOrderAsync(
                 update,
                 WalletAddress
