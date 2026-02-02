@@ -95,7 +95,7 @@ namespace SLT.Services._TransactionLog
 
                 var newLog = new TransactionLog
                 {
-                    EventType = BlockchainEventType.InvoiceCreated,
+                    EventType = BlockchainEventType.InvoicePaid,
                     InvoiceId = log.InvoiceId,
                     BlockNumber = (decimal)log.BlockNumber,
                     Hash = log.Hash,

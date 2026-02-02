@@ -324,7 +324,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             if (bytes.Length != 32)
                 throw new ArgumentException("Input must be exactly 32 bytes for bytes32");
 
-            return "0x" + bytes.ToHex();
+            return  bytes.ToHex();
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)

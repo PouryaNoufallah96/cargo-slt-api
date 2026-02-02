@@ -2,6 +2,7 @@
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Utilities;
 using SLT.Domain.Collections;
 using SLT.Domain.Repositories.Contracts;
 using SLT.Services._BlockChain;
@@ -54,7 +55,6 @@ namespace SLT.Services._Order
             {
                 var invoiceResult = await CreateQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description);
                 return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
-
             }
             catch (Exception ex)
             {
@@ -667,9 +667,11 @@ namespace SLT.Services._Order
             var buffer = new byte[32];
             RandomNumberGenerator.Fill(buffer);
 
-            return BitConverter.ToString(buffer)
+            var newId =  BitConverter.ToString(buffer)
                 .Replace("-", "")
                 .ToLowerInvariant();
+
+            return newId;
         }
 
        
