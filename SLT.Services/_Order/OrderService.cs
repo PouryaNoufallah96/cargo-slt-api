@@ -489,8 +489,9 @@ namespace SLT.Services._Order
             {
                 var tokenData = ValidateToken(invoiceUpdate.TokenSymbol);
 
-                //var activeDate = invoiceUpdate.ActivationDate.HasValue ? invoiceUpdate.ActivationDate.Value.ToDateTime(TimeOnly.MinValue) : DateOnly.FromDateTime(DateTime.Now).ToDateTime(TimeOnly.MinValue);
-                var activeDate = invoiceUpdate.ActivationDate.ToDateTime(TimeOnly.MinValue);
+                var nowPlus1 = DateTime.Now.AddMinutes(1);
+                var timeOnly = TimeOnly.FromDateTime(nowPlus1);
+                var activeDate = invoiceUpdate.ActivationDate.ToDateTime(timeOnly);
 
                 var invoice = new Invoice
                 {
