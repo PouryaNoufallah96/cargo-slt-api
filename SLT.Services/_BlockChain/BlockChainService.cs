@@ -223,6 +223,152 @@ namespace SLT.Services._BlockChain
         }
 
 
+        /// <summary>
+        /// use for delete multiple invoices 
+        /// </summary>
+        /// <param name="invoicesId"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
+        public async Task<string> DeleteMultipleInvoicesAsync(List<string> invoicesId)
+        {
+            if (invoicesId == null || invoicesId.Count == 0)
+                throw new BadRequestException("Invoice IDs list is empty.");
+
+            try
+            {
+                var ids = new List<byte[]>();
+
+                foreach (var id in invoicesId)
+                {
+                    if (string.IsNullOrEmpty(id))
+                        throw new BadRequestException("Invoice ID is null or empty.");
+
+                    ids.Add(HexToByteArray32(id));
+                }
+
+                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var function = contract.GetFunction("deleteBatchInvoice");
+
+                var gasPrice = await GetOptimalGasPriceAsync();
+                var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
+                    _settings.GetDefaultGasLimit());
+
+                var receipt = await function.SendTransactionAndWaitForReceiptAsync(
+                    from: _account.Address,
+                    gas: gas,
+                    gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
+                    value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
+                    functionInput: new object[]
+                    {
+                        ids.ToArray()
+                    }
+                );
+
+                if (receipt.Status.Value == 1)
+                {
+                    _logger.LogInformation(
+                        "DeleteMultipleInvoices successful. TxHash: {TxHash}",
+                        receipt.TransactionHash);
+
+                    return receipt.TransactionHash;
+                }
+                else
+                {
+                    _logger.LogError(
+                        "DeleteMultipleInvoices failed (reverted). TxHash: {TxHash}",
+                        receipt.TransactionHash);
+
+                    return null;
+                }
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert error during deleteBatchInvoice: {Message}",
+                    revertEx.Message);
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error during deleteBatchInvoice.");
+
+                return null;
+            }
+        }
+
+
+        /// <summary>
+        /// use for delete single invoice
+        /// </summary>
+        /// <param name="invoiceId"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
+        public async Task<string> DeleteSingleInvoiceAsync(string invoiceId)
+        {
+            if (string.IsNullOrEmpty(invoiceId))
+                throw new BadRequestException("Invoice ID is null or empty.");
+
+            try
+            {
+                var id = HexToByteArray32(invoiceId);
+
+                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var function = contract.GetFunction("deleteInvoice");
+
+                var gasPrice = await GetOptimalGasPriceAsync();
+                var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
+                    _settings.GetDefaultGasLimit());
+
+                var receipt = await function.SendTransactionAndWaitForReceiptAsync(
+                    from: _account.Address,
+                    gas: gas,
+                    gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
+                    value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
+                    functionInput: new object[]
+                    {
+                id
+                    }
+                );
+
+                if (receipt.Status.Value == 1)
+                {
+                    _logger.LogInformation(
+                        "DeleteSingleInvoice successful. TxHash: {TxHash}",
+                        receipt.TransactionHash);
+
+                    return receipt.TransactionHash;
+                }
+                else
+                {
+                    _logger.LogError(
+                        "DeleteSingleInvoice failed (reverted). TxHash: {TxHash}",
+                        receipt.TransactionHash);
+
+                    return null;
+                }
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert error during deleteInvoice: {Message}",
+                    revertEx.Message);
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error during deleteInvoice.");
+
+                return null;
+            }
+        }
 
 
         private AvailableTokenData ValidateToken(string tokenName)
@@ -293,7 +439,9 @@ namespace SLT.Services._BlockChain
             }
         }
 
-       
+        
+
+
 
         #endregion
     }

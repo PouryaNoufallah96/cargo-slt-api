@@ -1,4 +1,5 @@
-﻿using Utilities.Attributes;
+﻿using MongoDB.Bson.Serialization.Attributes;
+using Utilities.Attributes;
 using Utilities.MongoDatabase.Documents;
 
 namespace SLT.Domain.Collections
@@ -25,6 +26,7 @@ namespace SLT.Domain.Collections
         public DateTime? PayMoment { get; set; } = null;
         public string RegisterHash { get; set; } = null;
         public string PaymentHash { get; set; } = null; 
+        [BsonDefaultValue(null)] public string RemoveHash { get; set; } = null;
         public DateTime? ActivateDate { get; set; } = null; //date only
         public List<string> Errors { get; set; } = null;
 

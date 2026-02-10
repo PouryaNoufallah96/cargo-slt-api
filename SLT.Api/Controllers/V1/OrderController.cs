@@ -5,6 +5,7 @@ using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Order.DTOs.Updates;
 using Swashbuckle.AspNetCore.Annotations;
 using Utilities.Api;
+using Utilities.Attributes;
 using Utilities.Filters;
 
 namespace SLT.Api.Controllers.V1
@@ -17,6 +18,7 @@ namespace SLT.Api.Controllers.V1
     {
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = true)]
         [SwaggerOperation(Summary = "Create quick order", Tags = ["Order"])]
         public async Task<OrderFullResult> CreateQuickOrderAsync(
@@ -30,6 +32,7 @@ namespace SLT.Api.Controllers.V1
         }
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = true)]
         [SwaggerOperation(Summary = "Create multi step order", Tags = ["Order"])]
         public async Task<OrderFullResult> CreateMultiStepOrderAsync(
@@ -42,6 +45,7 @@ namespace SLT.Api.Controllers.V1
         }
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get user orders list", Tags = ["Order"])]
         public async Task<OrderListResult> GetOrderListAsync(
@@ -54,6 +58,7 @@ namespace SLT.Api.Controllers.V1
         }
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get order detail", Tags = ["Order"])]
         public async Task<OrderFullResult> GetOrderDetailAsync(
@@ -67,6 +72,7 @@ namespace SLT.Api.Controllers.V1
 
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get invoice detail", Tags = ["Invoice"])]
         public async Task<InvoiceResult> GetInvoiceDetailAsync(
@@ -77,6 +83,7 @@ namespace SLT.Api.Controllers.V1
 
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Mark invoice as seen by wallet", Tags = ["Invoice"])]
         public async Task<bool> SeenWalletAsync(
@@ -89,11 +96,25 @@ namespace SLT.Api.Controllers.V1
         }
 
         [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get Orders Reports", Tags = ["Order"])]
         public async  Task<OrderReportResult> GetOrderReportAsync()
         {
            return await _orderService.GetOrderReportAsync(WalletAddress);
         }
+
+
+        [HttpPost("[action]")]
+        [Authorize(RequireActiveUser = true)]
+        [CustomRateLimit]
+        [SwaggerOperation(Summary = "Remove Pending order with all invoices in", Tags = ["Order"])]
+        public async Task<string> DeletePendingOrderAsync(DeletePendingOrderUpdate update)
+        {
+           return await _orderService.DeletePendingOrderAsync(update,WalletAddress);
+        }
+
+
+
     }
 }

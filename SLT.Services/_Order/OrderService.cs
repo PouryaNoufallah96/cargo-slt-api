@@ -417,6 +417,71 @@ namespace SLT.Services._Order
         }
 
 
+        /// <summary>
+        /// use for remove peding order with invoices
+        /// </summary>
+        /// <param name="update"></param>
+        /// <param name="walletAddress"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="NotFoundException"></exception>
+        /// <exception cref="BadRequestException"></exception>
+        public async Task<string> DeletePendingOrderAsync(
+        DeletePendingOrderUpdate update,
+        string walletAddress)
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new ArgumentException("Wallet address is invalid.");
+
+            var order = await _orderRepository.AsQueryable()
+                .Where(o =>
+                    o.OwnerWallet.ToLower() == walletAddress.ToLower() &&
+                    o.OrderId == update.OrderId)
+                .FirstOrDefaultAsync()
+                ?? throw new NotFoundException("Order Not Found!");
+
+            if (order.State != OrderState.Pending)
+                throw new BadRequestException("Can not remove completed order");
+
+            var invoices = await _invoiceRepository.AsQueryable()
+                .Where(i =>
+                    i.OwnerWallet.ToLower() == walletAddress.ToLower() &&
+                    i.OrderId == update.OrderId)
+                .ToListAsync();
+
+
+            if (invoices.Count == 0)
+                throw new BadRequestException("There is no invoice in order");
+
+            if (invoices.Any(i => i.State != InvoiceState.Pending))
+                throw new BadRequestException("There is paid invoice in order");
+
+            var invoiceIds = invoices.Select(q => q.InvoiceId).ToList();
+            var txHash = await _blockChainService.DeleteMultipleInvoicesAsync(invoiceIds);
+
+            if (string.IsNullOrEmpty(txHash))
+                throw new BadRequestException("Blockchain transaction failed");
+
+            var filterdb = Builders<Invoice>.Filter.In(
+            i => i.InvoiceId,
+            invoiceIds); 
+
+            var updatedb = Builders<Invoice>.Update
+                .Set(i => i.IsDeleted, true)
+                .Set(i => i.RemoveHash, txHash)
+                .Set(i => i.DeletedMoment, DateTime.UtcNow);
+
+            await _invoiceRepository.UpdateManyAsync(filterdb, updatedb);
+            await _orderRepository.DeleteByIdAsync(order.Id);
+
+            _logger.LogInformation(
+                "Pending order deleted successfully. OrderId: {OrderId}, TxHash: {TxHash}",
+                update.OrderId,
+                txHash);
+
+            return order.OrderId;
+        }
+
 
         /// <summary>
         /// use for create quick invoice
@@ -675,6 +740,6 @@ namespace SLT.Services._Order
             return newId;
         }
 
-       
+      
     }
 }

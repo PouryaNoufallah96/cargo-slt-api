@@ -107,6 +107,32 @@
         ""stateMutability"": ""nonpayable""
     },
     {
+        ""type"": ""function"",
+        ""name"": ""deleteBatchInvoice"",
+        ""inputs"": [
+            {
+                ""name"": ""invoiceIds"",
+                ""type"": ""bytes32[]"",
+                ""internalType"": ""bytes32[]""
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""deleteInvoice"",
+        ""inputs"": [
+            {
+                ""name"": ""invoiceId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
         ""type"": ""event"",
         ""name"": ""InvoiceCreated"",
         ""inputs"": [
@@ -170,6 +196,19 @@
                 ""type"": ""uint256"",
                 ""indexed"": false,
                 ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""InvoiceDeleted"",
+        ""inputs"": [
+            {
+                ""name"": ""invoiceId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
             }
         ],
         ""anonymous"": false
