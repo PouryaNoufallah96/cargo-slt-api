@@ -10,7 +10,7 @@ namespace SLT.Services._Order
         Task<OrderFullResult> CreateMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
         Task<OrderListResult> GetOrderListAsync(GetPendingOrderListUpdate update, string walletAddress);
         Task<OrderFullResult> GetOrderDetailAsync(OrderIdUpdate update, string walletAddress);
-        Task<OrderReportResult> GetOrderReportAsync(string walletAddress);
+        Task<OrderTotalReportResult> GetTotalReportAsync(string walletAddress);
 
         Task<string> DeletePendingOrderAsync(DeletePendingOrderUpdate update,string walletAddress); 
 

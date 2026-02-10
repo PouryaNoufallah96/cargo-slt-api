@@ -212,7 +212,7 @@ namespace SLT.Services._Order
             var query = _orderRepository.AsQueryable();
 
 
-            if (update.ListType == OrderListType.Sent)
+            if (update.ListType == OrderListType.Received)
             {
                 query = query.Where(o => o.OwnerWallet.ToLower() != null && o.OwnerWallet.ToLower() == walletAddress.ToLower());
             }
@@ -366,6 +366,18 @@ namespace SLT.Services._Order
         }
 
 
+        public async Task<OrderTotalReportResult> GetTotalReportAsync(string walletAddress)
+        { 
+            var ownerData = await GetOwnerOrderReportAsync(walletAddress);
+            var paterData = await GetPayerOrderReportAsync(walletAddress);
+
+            return new OrderTotalReportResult
+            {
+                OwnerReport = ownerData,
+                PayerReport = paterData
+            };
+        }
+
 
         /// <summary>
         /// use for get report
@@ -373,7 +385,7 @@ namespace SLT.Services._Order
         /// <param name="walletAddress"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public async Task<OrderReportResult> GetOrderReportAsync(string walletAddress)
+        private async Task<OrderReportResult> GetOwnerOrderReportAsync(string walletAddress)
         {
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new ArgumentException("Wallet address is invalid.");
@@ -390,31 +402,78 @@ namespace SLT.Services._Order
                 ? 0
                 : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
 
-            var invoices = await _invoiceRepository.AsQueryable()
-                .Where(i => i.OwnerWallet.ToLower() == walletAddress.ToLower())
-                .ToListAsync();
+            //var invoices = await _invoiceRepository.AsQueryable()
+            //    .Where(i => i.OwnerWallet.ToLower() == walletAddress.ToLower())
+            //    .ToListAsync();
 
-            var totalInvoices = invoices.Count;
-            var paidInvoices = invoices.Count(i => i.State == InvoiceState.Completed);
-            var pendingInvoices = invoices.Count(i => i.State == InvoiceState.Pending);
+            //var totalInvoices = invoices.Count;
+            //var paidInvoices = invoices.Count(i => i.State == InvoiceState.Completed);
+            //var pendingInvoices = invoices.Count(i => i.State == InvoiceState.Pending);
 
-            var invoiceProgress = totalInvoices == 0
-                ? 0
-                : Math.Round((decimal)paidInvoices / totalInvoices * 100, 2);
+            //var invoiceProgress = totalInvoices == 0
+            //    ? 0
+            //    : Math.Round((decimal)paidInvoices / totalInvoices * 100, 2);
 
             return new OrderReportResult
             {
-                TotalInvoiceCount = totalInvoices,
                 PendingOrderCount = pendingOrders,
                 DoneOrderCount = doneOrders,
                 OrderProgress = orderProgress,
 
-                InvoiceCount = totalInvoices,
-                PaidInvoiceCount = paidInvoices,
-                PendingInvoiceCount = pendingInvoices,
-                InvoiceProgress = invoiceProgress
+                //TotalInvoiceCount = totalInvoices,
+                //InvoiceCount = totalInvoices,
+                //PaidInvoiceCount = paidInvoices,
+                //PendingInvoiceCount = pendingInvoices,
+                //InvoiceProgress = invoiceProgress
             };
         }
+
+        private async Task<OrderReportResult> GetPayerOrderReportAsync(string walletAddress) 
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new ArgumentException("Wallet address is invalid.");
+
+            var orders = await _orderRepository.AsQueryable()
+                .Where(o => o.SeenBy.Contains(walletAddress.ToLower()))
+                .ToListAsync();
+
+            //var orderids = orders.Select(o => o.OrderId);
+
+            var pendingOrders = orders.Count(o => o.State == OrderState.Pending);
+            var doneOrders = orders.Count(o => o.State == OrderState.Completed);
+            var totalOrders = orders.Count();
+
+            var orderProgress = totalOrders == 0
+                ? 0
+                : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
+
+            //var invoices = await _invoiceRepository.AsQueryable()
+            //    .Where(i => orderids.Contains(i.OrderId))
+            //    .ToListAsync();
+
+            //var totalInvoices = invoices.Count;
+            //var paidInvoices = invoices.Count(i => i.State == InvoiceState.Completed && i.PayerWallet.ToLower() == walletAddress.ToLower());
+            //var pendingInvoices = invoices.Count(i => i.State == InvoiceState.Pending);
+
+            //var invoiceProgress = totalInvoices == 0
+            //    ? 0
+            //    : Math.Round((decimal)paidInvoices / totalInvoices * 100, 2);
+
+            return new OrderReportResult
+            {
+                PendingOrderCount = pendingOrders,
+                DoneOrderCount = doneOrders,
+                OrderProgress = orderProgress,
+
+                //TotalInvoiceCount = totalInvoices,
+                //InvoiceCount = totalInvoices,
+                //PaidInvoiceCount = paidInvoices,
+                //PendingInvoiceCount = pendingInvoices,
+                //InvoiceProgress = invoiceProgress
+            };
+        }
+
+
 
 
         /// <summary>

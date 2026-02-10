@@ -99,9 +99,9 @@ namespace SLT.Api.Controllers.V1
         [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get Orders Reports", Tags = ["Order"])]
-        public async  Task<OrderReportResult> GetOrderReportAsync()
+        public async Task<OrderTotalReportResult> GetTotalReportAsync()
         {
-           return await _orderService.GetOrderReportAsync(WalletAddress);
+           return await _orderService.GetTotalReportAsync(WalletAddress);
         }
 
 
