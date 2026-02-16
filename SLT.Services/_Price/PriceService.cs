@@ -139,6 +139,7 @@ namespace SLT.Services._Price
 
                 decimal liquidityUsd = decimal.Parse(attributes.GetProperty("reserve_in_usd").GetString()!);
                 decimal volume24h = decimal.Parse(attributes.GetProperty("volume_usd").GetProperty("h24").GetString()!);
+                decimal changePrice24h = decimal.Parse(attributes.GetProperty("price_change_percentage").GetProperty("h24").GetString()!);
                 decimal? poolFee = attributes.TryGetProperty("pool_fee_percentage", out var feeProp) && feeProp.ValueKind != JsonValueKind.Null
                                    ? decimal.Parse(feeProp.GetString()!)
                                    : null;
@@ -148,6 +149,7 @@ namespace SLT.Services._Price
                     TokenName = tokenName,
                     TokenNetwork = "BSC",
                     Price = basePrice,
+                    ChangePrice24hPercentage = changePrice24h,
                 };
             }
             catch (Exception ex)

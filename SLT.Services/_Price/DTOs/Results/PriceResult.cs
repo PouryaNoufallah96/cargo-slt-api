@@ -6,7 +6,8 @@
         public string TokenName { get; set; }
         public string TokenNetwork { get; set; }
         public decimal Price { get; set; }
-        //public decimal LiquidityUsd { get; set; }
+        public decimal ChangePrice24hPercentage { get; set; }
+        //public decimal LiquidityUsd { get; set; } 
         //public decimal Volume24hUsd { get; set; }
         //public decimal? PoolFeeRate { get; set; }
         //public decimal ReserveBaseUsd { get; set; }

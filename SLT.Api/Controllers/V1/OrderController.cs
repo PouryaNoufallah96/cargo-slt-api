@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SLT.Services._Order;
 using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Order.DTOs.Updates;
+using SLT.Services._Price.DTOs.Storages;
 using Swashbuckle.AspNetCore.Annotations;
 using Utilities.Api;
 using Utilities.Attributes;
@@ -14,7 +15,7 @@ namespace SLT.Api.Controllers.V1
     [ApiResultFilter]
     [ApiVersion("1")]
     [Route("api/v{version:apiVersion}/[controller]")]
-    public class OrderController(IOrderService _orderService) : ApiBaseController
+    public class OrderController(IOrderService _orderService , PriceStorage priceStorage) : ApiBaseController
     {
 
         [HttpPost("[action]")]
@@ -112,6 +113,14 @@ namespace SLT.Api.Controllers.V1
         public async Task<string> DeletePendingOrderAsync(DeletePendingOrderUpdate update)
         {
            return await _orderService.DeletePendingOrderAsync(update,WalletAddress);
+        }
+
+        [HttpGet("[action]")]
+        [CustomRateLimit(maxAttemptsCount:40)]
+        [SwaggerOperation(Summary = "get price with price 24h change", Tags = ["Price"])]
+        public async Task<PriceStorage> GetPriceData()
+        {
+            return priceStorage;
         }
 
 
