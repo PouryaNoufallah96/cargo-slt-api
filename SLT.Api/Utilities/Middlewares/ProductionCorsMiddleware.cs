@@ -21,18 +21,11 @@ namespace SLT.Api.Utilities.Middlewares
 
             var allowedOrigins = new[]
             {
-            "https://slt.paytomoon.com",
-            "https://api.paytomoon.com",
-            "https://sltapp.paytomoon.com",
-            "https://app.s.com",
-            "https://mp.s.com",
-            "http://localhost:5132",
-            "http://localhost:5191",
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://192.168.100.5:3000",
-            "null",
-            ""
+            "https://sltcargopay.com",
+            "https://api.sltcargopay.com",
+            "https://panel.sltcargopay.com",
+            "https://gate.sltcargopay.com",
+            "https://app.sltcargopay.com"
             };
 
             if (!allowedOrigins.Contains(origin))

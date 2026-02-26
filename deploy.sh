@@ -4,7 +4,7 @@
 
 
 IMAGE_NAME="slt.api"
-CONTAINER_NAME="slt.paytomoon.com"
+CONTAINER_NAME="api.sltcargopay.com"
 
 
 echo "Building and publishing the project..."
