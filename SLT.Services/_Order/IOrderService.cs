@@ -6,6 +6,9 @@ namespace SLT.Services._Order
     public interface IOrderService
     {
 
+        Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress);
+        Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
+
         Task<OrderFullResult> CreateQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress);
         Task<OrderFullResult> CreateMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
         Task<OrderListResult> GetOrderListAsync(GetPendingOrderListUpdate update, string walletAddress);
@@ -19,7 +22,7 @@ namespace SLT.Services._Order
 
 
         Task<string> SyncPaidInvoiceAsync(string invoiceId, string payerWallet, string hash);
-
-
+        Task ActivateNotRegisteredInvoiceAsync(string invoiceId, string hash);
+        Task RemoveNotRegisteredInvoicesAsync();
     }
 }

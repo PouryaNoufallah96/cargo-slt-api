@@ -33,6 +33,10 @@ namespace SLT.Services._TransactionLog
                         q.EventType == BlockchainEventType.InvoiceCreated)
                     .FirstOrDefaultAsync();
 
+                var invoiceId = log.InvoiceId;
+                var txHash = log.Hash;
+                var owner = log.Creator;
+
                 if (existsLog != null)
                 {
                     _logger.LogWarning(
@@ -46,26 +50,36 @@ namespace SLT.Services._TransactionLog
                 var newLog = new TransactionLog
                 {
                     EventType = BlockchainEventType.InvoiceCreated,
-                    InvoiceId = log.InvoiceId,
+                    InvoiceId = invoiceId,
                     BlockNumber = (decimal)log.BlockNumber,
-                    Hash = log.Hash,
+                    Hash = txHash,
                     Amount = log.UsdAmount,
                     UnlockTime = log.UnLockTime ?? null,
                     Status = TransactionStatus.Confirmed,
-                    Wallet = log.Creator,
+                    Wallet = owner,
                     TokenAddress = log.Address,
                    
                 };
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
+                await _orderService.ActivateNotRegisteredInvoiceAsync(invoiceId, txHash);
+
+                try
+                {
+                    var shortInvoiceId = log.InvoiceId.Length > 10 ? txHash[..10] : txHash;
+                    await _hubContext.Clients.Group(owner).SendAsync("PaymentMessage", $"Invoice Created : {shortInvoiceId}");
+                }
+                catch (Exception)
+                {
+                    _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId} to wallet {Wallet}.", log.InvoiceId, owner);
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating InvoiceCreated transaction log.");
             }
         }
-
 
 
         /// <summary>

@@ -2,6 +2,7 @@
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Bcpg.OpenPgp;
 using Org.BouncyCastle.Utilities;
 using SLT.Domain.Collections;
 using SLT.Domain.Repositories.Contracts;
@@ -25,6 +26,266 @@ namespace SLT.Services._Order
         IInvoiceRepository _invoiceRepository,
         IRandomService _randomService) : IOrderService, IScopedDependency
     {
+
+
+        /// <summary>
+        /// use for create quick order
+        /// </summary>
+        /// <param name="update"></param>
+        /// <param name="walletAddress"></param>
+        /// <returns></returns>
+        public async Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress)
+        { 
+            var newOrder = new Order
+            {
+                OrderId = Guid.NewGuid().ToString("N"),
+                OwnerWallet = walletAddress,
+                PayerWallet = null,
+                SeenBy = [],
+                State = OrderState.Pending,
+                PaymentDay = null,
+                Type = OrderType.Quick,
+                Transportation = null,
+                TotalAmount = update.Amount,
+                TransferId = _randomService.GetSecureAlphaNumericString(12).ToUpper(),
+
+            };
+
+
+            await _orderRepository.InsertOneAsync(newOrder);
+            try
+            {
+                var invoiceResult = await CreatePendingQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description);
+                return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
+            }
+            catch (Exception ex) 
+            {
+                SentrySdk.CaptureMessage($"Error creating quick invoice for order ex : {ex.Message}");
+                await _orderRepository.DeleteByIdAsync(newOrder.Id);
+                throw new BadRequestException("Please try later!");
+            }
+        }
+
+
+        /// <summary>
+        /// use for create quick invoice
+        /// </summary>
+        /// <param name="order"></param>
+        /// <param name="token"></param>
+        /// <param name="desc"></param>
+        /// <param name="dateOnly"></param>
+        /// <returns></returns>
+        private async Task<InvoiceResult> CreatePendingQuickInvoiceAsync(Order order, string token, string desc, DateOnly? dateOnly = null)
+        {
+
+            var tokenData = ValidateToken(token);
+
+            var activeDate = dateOnly.HasValue
+                ? dateOnly.Value.ToDateTime(TimeOnly.MinValue)
+                : DateOnly.FromDateTime(DateTime.Now)
+                    .ToDateTime(TimeOnly.MinValue);
+
+            var newInvoice = new Invoice
+            {
+                InvoiceId = GenerateBytes32HexId(),
+                TokenSymbol = tokenData.Name,
+                TokenAddress = tokenData.Address,
+                USDTAmount = order.TotalAmount,
+                USDTAmountInWei = _blockChainService.ConvertToWei(order.TotalAmount, 18).ToString(),
+                OwnerWallet = order.OwnerWallet,
+                OrderId = order.OrderId,
+                PayerWallet = null,
+                State = InvoiceState.NotRegistered, 
+                ActivateDate = activeDate,
+                PayMoment = null,
+                Desctiption = desc.Trim(),
+                RegisterHash = null,
+                PaymentHash = null,
+                Errors = null,
+                TokenAmountAtPayment = null,
+                TokenAmountWeiAtPayment = null,
+                TokenPriceAtPayment = null,
+            };
+
+            await _invoiceRepository.InsertOneAsync(newInvoice);
+            return ConvertToReslut(newInvoice, OwnershipType.Owner);
+        }
+
+
+        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update,string walletAddress)
+        {
+            if (update == null)
+                throw new BadRequestException(nameof(update));
+
+            if (update.Invoices == null || !update.Invoices.Any())
+                throw new BadRequestException("Invoices list cannot be empty.");
+
+            var invoicesTotal = update.Invoices.Sum(i => i.Amount);
+            if (invoicesTotal != update.TotalAmount)
+                throw new BadRequestException(
+                    "Sum of invoice amounts does not match order total amount.");
+
+            var newOrder = new Order
+            {
+                OrderId = Guid.NewGuid().ToString("N"),
+                OwnerWallet = walletAddress,
+                PayerWallet = null,
+                SeenBy = [],
+                State = OrderState.Pending,
+                PaymentDay = null,
+                Type = OrderType.Multi,
+                Transportation = update.Transportation.Trim(),
+                TotalAmount = update.TotalAmount,
+                TransferId = _randomService.GetSecureAlphaNumericString(12).ToUpper(),
+            };
+
+            await _orderRepository.InsertOneAsync(newOrder);
+            try
+            {
+                var invoiceResults = await CreatePendingMultiStepInvoicesAsync(newOrder, update.Invoices, walletAddress);
+
+                return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
+            }
+            catch (Exception ex)
+            {
+                SentrySdk.CaptureMessage($"Error creating multi-step invoices for order ex : {ex.Message}");
+                await _orderRepository.DeleteByIdAsync(newOrder.Id);
+                throw new BadRequestException("Please try later!");
+            }
+
+        }
+
+
+        /// <summary>
+        /// use for create multi step invoices
+        /// </summary>
+        /// <param name="order"></param>
+        /// <param name="invoiceUpdates"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
+        /// <exception cref="Exception"></exception>
+        private async Task<List<InvoiceResult>> CreatePendingMultiStepInvoicesAsync(
+        Order order,
+        List<MultiStepInvoiceUpdate> invoiceUpdates, string ownerAddress)
+        {
+            if (invoiceUpdates == null || !invoiceUpdates.Any())
+                throw new BadRequestException("Invoice list is empty.");
+
+            var invoices = new List<Invoice>();
+            var blockchainInputs = new List<CreateMultipleInvoicesUpdate>();
+
+            foreach (var invoiceUpdate in invoiceUpdates)
+            {
+                var tokenData = ValidateToken(invoiceUpdate.TokenSymbol);
+
+                var nowPlus1 = DateTime.Now.AddMinutes(1);
+                var timeOnly = TimeOnly.FromDateTime(nowPlus1);
+                var activeDate = invoiceUpdate.ActivationDate.ToDateTime(timeOnly);
+
+                var invoice = new Invoice
+                {
+                    InvoiceId = GenerateBytes32HexId(),
+                    TokenSymbol = tokenData.Name,
+                    TokenAddress = tokenData.Address,
+                    USDTAmount = invoiceUpdate.Amount,
+                    USDTAmountInWei = _blockChainService
+                        .ConvertToWei(invoiceUpdate.Amount, 18)
+                        .ToString(),
+
+                    OwnerWallet = order.OwnerWallet,
+                    OrderId = order.OrderId,
+                    PayerWallet = null,
+                    State = InvoiceState.NotRegistered,
+                    ActivateDate = activeDate,
+                    Desctiption = invoiceUpdate.Description?.Trim(),
+
+                    PayMoment = null,
+                    RegisterHash = null,
+                    PaymentHash = null,
+                    Errors = null,
+
+                    TokenAmountAtPayment = null,
+                    TokenAmountWeiAtPayment = null,
+                    TokenPriceAtPayment = null,
+                };
+
+                invoices.Add(invoice);
+
+                blockchainInputs.Add(new CreateMultipleInvoicesUpdate
+                {
+                    Id = invoice.InvoiceId,
+                    TokenAddress = invoice.TokenAddress,
+                    USDTAmount = invoice.USDTAmount,
+                    UnLockTime = activeDate
+                });
+            }        
+
+            await _invoiceRepository.InsertManyAsync(invoices);
+
+            return invoices.Select(invoice => ConvertToReslut(invoice, OwnershipType.Owner)).ToList();
+        }
+
+
+
+        public async Task RemoveNotRegisteredInvoicesAsync()
+        {
+            var oneWeekAgo = DateTime.UtcNow.AddDays(-7);
+
+            var invoices = await _invoiceRepository.AsQueryable()
+                .Where(i => i.State == InvoiceState.NotRegistered && i.CreatedMoment <= oneWeekAgo)
+                .Take(10)
+                .ToListAsync();
+
+            if (!invoices.Any())
+                return;
+
+            var grouped = invoices.GroupBy(i => i.OrderId);
+
+            foreach (var group in grouped)
+            {
+                var order = await _orderRepository.AsQueryable()
+                    .FirstOrDefaultAsync(o => o.OrderId == group.Key);
+
+                if (order == null)
+                    continue;
+
+                if (order.State != OrderState.Pending)
+                    continue;
+
+                if (order.Type == OrderType.Quick)
+                {
+                    foreach (var invoice in group)
+                    {
+                        await _invoiceRepository.DeleteOneAsync(i => i.Id == invoice.Id);
+                    }
+
+                    await _orderRepository.DeleteOneAsync(o => o.Id == order.Id);
+                }
+                else if (order.Type == OrderType.Multi)
+                {
+                    await _invoiceRepository.DeleteManyAsync(i => i.OrderId == order.OrderId);
+
+                    await _orderRepository.DeleteOneAsync(o => o.Id == order.Id);
+                }
+            }
+        }
+
+
+        public async Task ActivateNotRegisteredInvoiceAsync(string invoiceId, string hash)
+        {
+            var filter = Builders<Invoice>.Filter.And(
+                Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoiceId),
+                Builders<Invoice>.Filter.Eq(x => x.State, InvoiceState.NotRegistered)
+            );
+
+            var update = Builders<Invoice>.Update
+                .Set(x => x.State, InvoiceState.Pending)
+                .Set(x => x.RegisterHash, hash);
+
+            await _invoiceRepository.FindOneAndUpdateAsync(filter, update);            
+        }
+
+
 
         /// <summary>
         /// use for create quick order

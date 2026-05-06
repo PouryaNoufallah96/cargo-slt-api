@@ -40,7 +40,8 @@ namespace SLT.Domain.Collections
         Completed,
         Failed,
         Expired,
-        Cancelled
+        Cancelled,
+        NotRegistered
     }
 
 }
