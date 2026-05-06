@@ -5,13 +5,13 @@ using static Utilities.Constants.RegisterMode;
 namespace SLT.Services._Order._BackgroundServices
 {
     public class RemoveNotRegisteredOrderAndInvoicesScheduler(IServiceProvider serviceProvider)
-        : SchedulerBase(serviceProvider, TimeSpan.FromDays(1)), IHostedDependency
+        : SchedulerBase(serviceProvider, TimeSpan.FromHours(1)), IHostedDependency
     {
         protected override async Task HandleAsync(IServiceProvider scopedProvider, CancellationToken cancellationToken)
         {
             var orderService = scopedProvider.GetRequiredService<IOrderService>();
 
-            await orderService.RemoveNotRegisteredInvoicesAsync();
+            await orderService.RemoveNotRegisteredOrdersAsync();
         }
     }
 }

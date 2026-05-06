@@ -35,14 +35,14 @@ namespace SLT.Services._Order
         /// <param name="walletAddress"></param>
         /// <returns></returns>
         public async Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress)
-        { 
+        {
             var newOrder = new Order
             {
                 OrderId = Guid.NewGuid().ToString("N"),
                 OwnerWallet = walletAddress,
                 PayerWallet = null,
                 SeenBy = [],
-                State = OrderState.Pending,
+                State = OrderState.NotRegistered,
                 PaymentDay = null,
                 Type = OrderType.Quick,
                 Transportation = null,
@@ -58,7 +58,7 @@ namespace SLT.Services._Order
                 var invoiceResult = await CreatePendingQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description);
                 return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 SentrySdk.CaptureMessage($"Error creating quick invoice for order ex : {ex.Message}");
                 await _orderRepository.DeleteByIdAsync(newOrder.Id);
@@ -95,7 +95,7 @@ namespace SLT.Services._Order
                 OwnerWallet = order.OwnerWallet,
                 OrderId = order.OrderId,
                 PayerWallet = null,
-                State = InvoiceState.NotRegistered, 
+                State = InvoiceState.NotRegistered,
                 ActivateDate = activeDate,
                 PayMoment = null,
                 Desctiption = desc.Trim(),
@@ -112,7 +112,7 @@ namespace SLT.Services._Order
         }
 
 
-        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update,string walletAddress)
+        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress)
         {
             if (update == null)
                 throw new BadRequestException(nameof(update));
@@ -131,7 +131,7 @@ namespace SLT.Services._Order
                 OwnerWallet = walletAddress,
                 PayerWallet = null,
                 SeenBy = [],
-                State = OrderState.Pending,
+                State = OrderState.NotRegistered,
                 PaymentDay = null,
                 Type = OrderType.Multi,
                 Transportation = update.Transportation.Trim(),
@@ -172,7 +172,6 @@ namespace SLT.Services._Order
                 throw new BadRequestException("Invoice list is empty.");
 
             var invoices = new List<Invoice>();
-            var blockchainInputs = new List<CreateMultipleInvoicesUpdate>();
 
             foreach (var invoiceUpdate in invoiceUpdates)
             {
@@ -210,15 +209,7 @@ namespace SLT.Services._Order
                 };
 
                 invoices.Add(invoice);
-
-                blockchainInputs.Add(new CreateMultipleInvoicesUpdate
-                {
-                    Id = invoice.InvoiceId,
-                    TokenAddress = invoice.TokenAddress,
-                    USDTAmount = invoice.USDTAmount,
-                    UnLockTime = activeDate
-                });
-            }        
+            }
 
             await _invoiceRepository.InsertManyAsync(invoices);
 
@@ -227,49 +218,31 @@ namespace SLT.Services._Order
 
 
 
-        public async Task RemoveNotRegisteredInvoicesAsync()
+        public async Task RemoveNotRegisteredOrdersAsync()
         {
-            var oneWeekAgo = DateTime.UtcNow.AddDays(-7);
-
-            var invoices = await _invoiceRepository.AsQueryable()
-                .Where(i => i.State == InvoiceState.NotRegistered && i.CreatedMoment <= oneWeekAgo)
+            var orders = await _orderRepository.AsQueryable()
+                .Where(o => o.State == OrderState.NotRegistered)
                 .Take(10)
                 .ToListAsync();
 
-            if (!invoices.Any())
+            if (!orders.Any())
                 return;
 
-            var grouped = invoices.GroupBy(i => i.OrderId);
+            var orderIds = orders.Select(o => o.OrderId).ToList();
 
-            foreach (var group in grouped)
+            foreach (var order in orders)
             {
-                var order = await _orderRepository.AsQueryable()
-                    .FirstOrDefaultAsync(o => o.OrderId == group.Key);
+                var hasOtherState = await _invoiceRepository.AsQueryable()
+                    .AnyAsync(i => i.OrderId == order.OrderId && i.State != InvoiceState.NotRegistered);
 
-                if (order == null)
+                if (hasOtherState)
                     continue;
 
-                if (order.State != OrderState.Pending)
-                    continue;
+                await _invoiceRepository.DeleteManyAsync(i => i.OrderId == order.OrderId);
 
-                if (order.Type == OrderType.Quick)
-                {
-                    foreach (var invoice in group)
-                    {
-                        await _invoiceRepository.DeleteOneAsync(i => i.Id == invoice.Id);
-                    }
-
-                    await _orderRepository.DeleteOneAsync(o => o.Id == order.Id);
-                }
-                else if (order.Type == OrderType.Multi)
-                {
-                    await _invoiceRepository.DeleteManyAsync(i => i.OrderId == order.OrderId);
-
-                    await _orderRepository.DeleteOneAsync(o => o.Id == order.Id);
-                }
+                await _orderRepository.DeleteOneAsync(o => o.Id == order.Id);
             }
         }
-
 
         public async Task ActivateNotRegisteredInvoiceAsync(string invoiceId, string hash)
         {
@@ -282,9 +255,27 @@ namespace SLT.Services._Order
                 .Set(x => x.State, InvoiceState.Pending)
                 .Set(x => x.RegisterHash, hash);
 
-            await _invoiceRepository.FindOneAndUpdateAsync(filter, update);            
-        }
+            var options = new FindOneAndUpdateOptions<Invoice>
+            {
+                ReturnDocument = ReturnDocument.After 
+            };
 
+            var updatedInvoice = await _invoiceRepository
+                .FindOneAndUpdateWithOptionAsync(filter, update, options);
+
+            if (updatedInvoice == null)
+                return;
+
+            var orderFilter = Builders<Order>.Filter.And(
+                Builders<Order>.Filter.Eq(o => o.OrderId, updatedInvoice.OrderId),
+                Builders<Order>.Filter.Eq(o => o.State, OrderState.NotRegistered)
+            );
+
+            var orderUpdate = Builders<Order>.Update
+                .Set(o => o.State, OrderState.Pending);
+
+            await _orderRepository.FindOneAndUpdateAsync(orderFilter, orderUpdate);
+        }
 
 
         /// <summary>
@@ -350,7 +341,7 @@ namespace SLT.Services._Order
 
             var newOrder = new Order
             {
-                OrderId =  Guid.NewGuid().ToString("N"),
+                OrderId = Guid.NewGuid().ToString("N"),
                 OwnerWallet = walletAddress,
                 PayerWallet = null,
                 SeenBy = [],
@@ -365,7 +356,7 @@ namespace SLT.Services._Order
             await _orderRepository.InsertOneAsync(newOrder);
             try
             {
-                var invoiceResults = await CreateMultiStepInvoicesAsync(newOrder, update.Invoices,walletAddress);
+                var invoiceResults = await CreateMultiStepInvoicesAsync(newOrder, update.Invoices, walletAddress);
 
                 return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
             }
@@ -392,7 +383,7 @@ namespace SLT.Services._Order
                 .Where(q => q.InvoiceId.ToLower() == invoiceId.ToLower() && q.State == InvoiceState.Pending)
                 .FirstOrDefaultAsync();
 
-            if(invoice == null) return null;
+            if (invoice == null) return null;
 
             invoice.PaymentHash = hash;
             invoice.PayMoment = DateTime.UtcNow;
@@ -400,7 +391,14 @@ namespace SLT.Services._Order
             invoice.State = InvoiceState.Completed;
             await _invoiceRepository.ReplaceOneAsync(invoice);
 
-            await SyncOrderWithOrderAsync(invoice.OrderId);
+            try
+            {
+                await SyncOrderWithOrderIdAsync(invoice.OrderId);   
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e.Message);
+            }
 
             return invoice.OwnerWallet;
         }
@@ -412,9 +410,10 @@ namespace SLT.Services._Order
         /// </summary>
         /// <param name="orderId"></param>
         /// <returns></returns>
-        public async Task SyncOrderWithOrderAsync(string orderId)
+        public async Task SyncOrderWithOrderIdAsync(string orderId)
         {
             var order = await _orderRepository.AsQueryable()
+                .Where(q => q.State != OrderState.NotRegistered)
                 .Where(q => q.OrderId.ToLower() == orderId.ToLower())
                 .FirstOrDefaultAsync();
 
@@ -422,6 +421,7 @@ namespace SLT.Services._Order
                 return;
 
             var invoices = await _invoiceRepository.AsQueryable()
+                .Where(q => q.State != InvoiceState.NotRegistered)
                 .Where(q => q.OrderId.ToLower() == orderId.ToLower())
                 .ToListAsync();
 
@@ -470,7 +470,7 @@ namespace SLT.Services._Order
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new BadRequestException("Wallet address is required.");
 
-            var query = _orderRepository.AsQueryable();
+            var query = _orderRepository.AsQueryable().Where(q=> q.State != OrderState.NotRegistered);
 
 
             if (update.ListType == OrderListType.Received)
@@ -543,6 +543,7 @@ namespace SLT.Services._Order
         public async Task<OrderFullResult> GetOrderDetailAsync(OrderIdUpdate update, string walletAddress)
         {
             var order = await _orderRepository.AsQueryable()
+                .Where(q => q.State != OrderState.NotRegistered)
                  .Where(o => (o.OrderId.ToLower() == update.OrderOrTransferId.ToLower()
                            || o.TransferId.ToLower() == update.OrderOrTransferId.ToLower())
 
@@ -552,15 +553,17 @@ namespace SLT.Services._Order
             if (order == null)
                 throw new BadRequestException("Order not found.");
 
-            var query =  _invoiceRepository.AsQueryable()
+            var query = _invoiceRepository.AsQueryable()
+                .Where(q => q.State != InvoiceState.NotRegistered)
                 .Where(i => i.OrderId.ToLower() == order.OrderId.ToLower());
-                
+
 
             if (order.State == OrderState.Completed)
             {
-                query = query.Where(q => q.OwnerWallet.ToLower() == walletAddress.ToLower() || q.PayerWallet.ToLower() == walletAddress.ToLower());
+                query = query.Where(q => q.OwnerWallet.ToLower() == walletAddress.ToLower()
+                || q.PayerWallet.ToLower() == walletAddress.ToLower());
             }
-            
+
             var invoices = await query.ToListAsync();
 
             var type = order.OwnerWallet.ToLower() == walletAddress.ToLower()
@@ -581,9 +584,10 @@ namespace SLT.Services._Order
         /// <param name="update"></param>
         /// <returns></returns>
         /// <exception cref="NotFoundException"></exception>
-        public async Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update,string walletAddress)
+        public async Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update, string walletAddress)
         {
-            var invoice =  await _invoiceRepository.AsQueryable()
+            var invoice = await _invoiceRepository.AsQueryable()
+                .Where(q => q.State != InvoiceState.NotRegistered)
                 .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
                 .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
 
@@ -605,13 +609,15 @@ namespace SLT.Services._Order
         public async Task<bool> SeenWalletAsync(InvoiceIdUpdate update, string walletAddress)
         {
             var invoice = await _invoiceRepository.AsQueryable()
-              .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
-              .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
+                .Where(q => q.State != InvoiceState.NotRegistered)
+                .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
+                .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
 
             if (invoice.OwnerWallet.ToLower() == walletAddress.ToLower())
                 throw new BadRequestException("You are Owner of this invoice!");
 
             var order = await _orderRepository.AsQueryable()
+                .Where(o => o.State != OrderState.NotRegistered)
                 .Where(o => o.OrderId.ToLower() == invoice.OrderId.ToLower())
                 .FirstOrDefaultAsync() ?? throw new NotFoundException("Order not found!");
 
@@ -628,7 +634,7 @@ namespace SLT.Services._Order
 
 
         public async Task<OrderTotalReportResult> GetTotalReportAsync(string walletAddress)
-        { 
+        {
             var ownerData = await GetOwnerOrderReportAsync(walletAddress);
             var paterData = await GetPayerOrderReportAsync(walletAddress);
 
@@ -652,6 +658,7 @@ namespace SLT.Services._Order
                 throw new ArgumentException("Wallet address is invalid.");
 
             var orders = await _orderRepository.AsQueryable()
+                .Where(o => o.State != OrderState.NotRegistered)
                 .Where(o => o.OwnerWallet.ToLower() == walletAddress.ToLower())
                 .ToListAsync();
 
@@ -689,12 +696,13 @@ namespace SLT.Services._Order
             };
         }
 
-        private async Task<OrderReportResult> GetPayerOrderReportAsync(string walletAddress) 
+        private async Task<OrderReportResult> GetPayerOrderReportAsync(string walletAddress)
         {
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new ArgumentException("Wallet address is invalid.");
 
             var orders = await _orderRepository.AsQueryable()
+                .Where(o => o.State != OrderState.NotRegistered)
                 .Where(o => o.SeenBy.Contains(walletAddress.ToLower()))
                 .ToListAsync();
 
@@ -754,6 +762,7 @@ namespace SLT.Services._Order
                 throw new ArgumentException("Wallet address is invalid.");
 
             var order = await _orderRepository.AsQueryable()
+                .Where(o => o.State != OrderState.NotRegistered)
                 .Where(o =>
                     o.OwnerWallet.ToLower() == walletAddress.ToLower() &&
                     o.OrderId == update.OrderId)
@@ -765,6 +774,7 @@ namespace SLT.Services._Order
 
             var invoices = await _invoiceRepository.AsQueryable()
                 .Where(i =>
+                    i.State != InvoiceState.NotRegistered &&
                     i.OwnerWallet.ToLower() == walletAddress.ToLower() &&
                     i.OrderId == update.OrderId)
                 .ToListAsync();
@@ -784,7 +794,7 @@ namespace SLT.Services._Order
 
             var filterdb = Builders<Invoice>.Filter.In(
             i => i.InvoiceId,
-            invoiceIds); 
+            invoiceIds);
 
             var updatedb = Builders<Invoice>.Update
                 .Set(i => i.IsDeleted, true)
@@ -843,12 +853,12 @@ namespace SLT.Services._Order
                 TokenPriceAtPayment = null,
             };
 
-            var registerHash = await _blockChainService.CreateQuickInvoiceAsync(newInvoice.InvoiceId, newInvoice.TokenAddress, newInvoice.USDTAmount,newInvoice.OwnerWallet);
+            var registerHash = await _blockChainService.CreateQuickInvoiceAsync(newInvoice.InvoiceId, newInvoice.TokenAddress, newInvoice.USDTAmount, newInvoice.OwnerWallet);
             if (registerHash == null) throw new BadRequestException("There is a problem, try later!");
 
             newInvoice.RegisterHash = registerHash;
             await _invoiceRepository.InsertOneAsync(newInvoice);
-            return ConvertToReslut(newInvoice,OwnershipType.Owner);
+            return ConvertToReslut(newInvoice, OwnershipType.Owner);
         }
 
 
@@ -917,7 +927,7 @@ namespace SLT.Services._Order
             }
 
             var txHash = await _blockChainService
-                .CreateMultipleInvoicesAsync(blockchainInputs,ownerAddress);
+                .CreateMultipleInvoicesAsync(blockchainInputs, ownerAddress);
 
             if (txHash == null) throw new BadRequestException("There is a problem, try later!");
 
@@ -940,7 +950,7 @@ namespace SLT.Services._Order
         /// </summary>
         /// <param name="invoice"></param>
         /// <returns></returns>
-        private InvoiceResult ConvertToReslut(Invoice invoice,OwnershipType type)
+        private InvoiceResult ConvertToReslut(Invoice invoice, OwnershipType type)
         {
             return new InvoiceResult
             {
@@ -1011,7 +1021,7 @@ namespace SLT.Services._Order
         /// <param name="invoiceResults"></param>
         /// <param name="order"></param>
         /// <returns></returns>
-        private OrderFullResult ConvertToReslut(List<InvoiceResult> invoiceResults, Order order , OwnershipType type)
+        private OrderFullResult ConvertToReslut(List<InvoiceResult> invoiceResults, Order order, OwnershipType type)
         {
             return new OrderFullResult
             {
@@ -1053,13 +1063,13 @@ namespace SLT.Services._Order
             var buffer = new byte[32];
             RandomNumberGenerator.Fill(buffer);
 
-            var newId =  BitConverter.ToString(buffer)
+            var newId = BitConverter.ToString(buffer)
                 .Replace("-", "")
                 .ToLowerInvariant();
 
             return newId;
         }
 
-      
+
     }
 }

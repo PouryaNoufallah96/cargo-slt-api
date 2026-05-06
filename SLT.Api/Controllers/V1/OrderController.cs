@@ -65,7 +65,7 @@ namespace SLT.Api.Controllers.V1
         public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(
             CreateMultiStepOrderUpdate update)
         {
-            return await _orderService.CreateMultiStepOrderAsync(
+            return await _orderService.CreatePendingMultiStepOrderAsync(
                 update,
                 WalletAddress
             );

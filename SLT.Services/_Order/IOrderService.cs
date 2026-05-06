@@ -23,6 +23,6 @@ namespace SLT.Services._Order
 
         Task<string> SyncPaidInvoiceAsync(string invoiceId, string payerWallet, string hash);
         Task ActivateNotRegisteredInvoiceAsync(string invoiceId, string hash);
-        Task RemoveNotRegisteredInvoicesAsync();
+        Task RemoveNotRegisteredOrdersAsync(); 
     }
 }

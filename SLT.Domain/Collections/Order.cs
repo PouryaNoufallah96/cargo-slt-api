@@ -24,7 +24,7 @@ namespace SLT.Domain.Collections
 
 
     public enum OrderType { Quick, Multi }
-    public enum OrderState { Pending, Completed }
+    public enum OrderState { Pending, Completed, NotRegistered }
 
 
 
