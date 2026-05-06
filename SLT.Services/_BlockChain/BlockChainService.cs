@@ -52,7 +52,8 @@ namespace SLT.Services._BlockChain
         public async Task<string> CreateQuickInvoiceAsync(
             string id,
             string tokenAddress,
-            decimal usdtAmount)
+            decimal usdtAmount,
+            string ownerAddress)
         {
             if (string.IsNullOrEmpty(id))
                 throw new BadRequestException("Invoice ID is null or empty.");
@@ -83,6 +84,7 @@ namespace SLT.Services._BlockChain
                     functionInput: new object[]
                     {
                 invoiceIdBytes,
+                ownerAddress,
                 tokenAddress,
                 amountInWei
                     }
@@ -131,7 +133,7 @@ namespace SLT.Services._BlockChain
         /// Returns transaction hash if successful; otherwise logs and returns null.
         /// </summary>
         public async Task<string> CreateMultipleInvoicesAsync(
-            List<CreateMultipleInvoicesUpdate> invoices)
+            List<CreateMultipleInvoicesUpdate> invoices, string ownerAddress)
         {
             if (invoices == null || invoices.Count == 0)
                 throw new BadRequestException("Invoices list is empty.");
@@ -179,6 +181,7 @@ namespace SLT.Services._BlockChain
                     value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
                     functionInput: new object[]
                     {
+                ownerAddress,
                 ids.ToArray(),
                 tokens.ToArray(),
                 usdAmounts.ToArray(),
@@ -439,7 +442,7 @@ namespace SLT.Services._BlockChain
             }
         }
 
-        
+
 
 
 

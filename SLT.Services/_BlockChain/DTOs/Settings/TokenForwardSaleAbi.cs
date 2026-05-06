@@ -10,6 +10,11 @@
         ""name"": ""createOrderedInvoices"",
         ""inputs"": [
             {
+                ""name"": ""receiver"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
+            },
+            {
                 ""name"": ""ids"",
                 ""type"": ""bytes32[]"",
                 ""internalType"": ""bytes32[]""
@@ -41,6 +46,11 @@
                 ""name"": ""id"",
                 ""type"": ""bytes32"",
                 ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""receiver"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
             },
             {
                 ""name"": ""token"",

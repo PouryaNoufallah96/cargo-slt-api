@@ -104,7 +104,7 @@ namespace SLT.Services._Order
             await _orderRepository.InsertOneAsync(newOrder);
             try
             {
-                var invoiceResults = await CreateMultiStepInvoicesAsync(newOrder, update.Invoices);
+                var invoiceResults = await CreateMultiStepInvoicesAsync(newOrder, update.Invoices,walletAddress);
 
                 return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
             }
@@ -582,7 +582,7 @@ namespace SLT.Services._Order
                 TokenPriceAtPayment = null,
             };
 
-            var registerHash = await _blockChainService.CreateQuickInvoiceAsync(newInvoice.InvoiceId, newInvoice.TokenAddress, newInvoice.USDTAmount);
+            var registerHash = await _blockChainService.CreateQuickInvoiceAsync(newInvoice.InvoiceId, newInvoice.TokenAddress, newInvoice.USDTAmount,newInvoice.OwnerWallet);
             if (registerHash == null) throw new BadRequestException("There is a problem, try later!");
 
             newInvoice.RegisterHash = registerHash;
@@ -601,7 +601,7 @@ namespace SLT.Services._Order
         /// <exception cref="Exception"></exception>
         private async Task<List<InvoiceResult>> CreateMultiStepInvoicesAsync(
         Order order,
-        List<MultiStepInvoiceUpdate> invoiceUpdates)
+        List<MultiStepInvoiceUpdate> invoiceUpdates, string ownerAddress)
         {
             if (invoiceUpdates == null || !invoiceUpdates.Any())
                 throw new BadRequestException("Invoice list is empty.");
@@ -656,7 +656,7 @@ namespace SLT.Services._Order
             }
 
             var txHash = await _blockChainService
-                .CreateMultipleInvoicesAsync(blockchainInputs);
+                .CreateMultipleInvoicesAsync(blockchainInputs,ownerAddress);
 
             if (txHash == null) throw new BadRequestException("There is a problem, try later!");
 
