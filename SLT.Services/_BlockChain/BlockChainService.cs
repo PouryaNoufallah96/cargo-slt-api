@@ -44,186 +44,186 @@ namespace SLT.Services._BlockChain
         }
 
 
-        /// <summary>
-        /// Executes the <c>createQuickInvoice</c> function on the blockchain contract.
-        /// Converts inputs properly, waits for transaction receipt, and returns
-        /// transaction hash if successful; otherwise logs and returns null.
-        /// </summary>
-        public async Task<string> CreateQuickInvoiceAsync(
-            string id,
-            string tokenAddress,
-            decimal usdtAmount,
-            string ownerAddress)
-        {
-            if (string.IsNullOrEmpty(id))
-                throw new BadRequestException("Invoice ID is null or empty.");
+        ///// <summary>
+        ///// Executes the <c>createQuickInvoice</c> function on the blockchain contract.
+        ///// Converts inputs properly, waits for transaction receipt, and returns
+        ///// transaction hash if successful; otherwise logs and returns null.
+        ///// </summary>
+        //public async Task<string> CreateQuickInvoiceAsync(
+        //    string id,
+        //    string tokenAddress,
+        //    decimal usdtAmount,
+        //    string ownerAddress)
+        //{
+        //    if (string.IsNullOrEmpty(id))
+        //        throw new BadRequestException("Invoice ID is null or empty.");
 
-            if (string.IsNullOrEmpty(tokenAddress))
-                throw new BadRequestException("Token address is null or empty.");
+        //    if (string.IsNullOrEmpty(tokenAddress))
+        //        throw new BadRequestException("Token address is null or empty.");
 
-            if (usdtAmount <= 0)
-                throw new BadRequestException("USDT amount must be greater than zero.");
+        //    if (usdtAmount <= 0)
+        //        throw new BadRequestException("USDT amount must be greater than zero.");
 
-            try
-            {
-                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
-                var function = contract.GetFunction("createQuickInvoice");
+        //    try
+        //    {
+        //        var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+        //        var function = contract.GetFunction("createQuickInvoice");
 
-                var invoiceIdBytes = HexToByteArray32(id);
-                var amountInWei = ConvertToWei(usdtAmount, 18);
+        //        var invoiceIdBytes = HexToByteArray32(id);
+        //        var amountInWei = ConvertToWei(usdtAmount, 18);
 
-                var gasPrice = await GetOptimalGasPriceAsync();
-                var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
-                    _settings.GetDefaultGasLimit());
+        //        var gasPrice = await GetOptimalGasPriceAsync();
+        //        var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
+        //            _settings.GetDefaultGasLimit());
 
-                var receipt = await function.SendTransactionAndWaitForReceiptAsync(
-                    from: _account.Address,
-                    gas: gas,
-                    gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
-                    value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
-                    functionInput: new object[]
-                    {
-                invoiceIdBytes,
-                ownerAddress,
-                tokenAddress,
-                amountInWei
-                    }
-                );
+        //        var receipt = await function.SendTransactionAndWaitForReceiptAsync(
+        //            from: _account.Address,
+        //            gas: gas,
+        //            gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
+        //            value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
+        //            functionInput: new object[]
+        //            {
+        //        invoiceIdBytes,
+        //        ownerAddress,
+        //        tokenAddress,
+        //        amountInWei
+        //            }
+        //        );
 
-                if (receipt.Status.Value == 1)
-                {
-                    _logger.LogInformation(
-                        "CreateQuickInvoice successful. TxHash: {TxHash}",
-                        receipt.TransactionHash);
+        //        if (receipt.Status.Value == 1)
+        //        {
+        //            _logger.LogInformation(
+        //                "CreateQuickInvoice successful. TxHash: {TxHash}",
+        //                receipt.TransactionHash);
 
-                    return receipt.TransactionHash;
-                }
-                else
-                {
-                    _logger.LogError(
-                        "CreateQuickInvoice failed (reverted). TxHash: {TxHash}",
-                        receipt.TransactionHash);
+        //            return receipt.TransactionHash;
+        //        }
+        //        else
+        //        {
+        //            _logger.LogError(
+        //                "CreateQuickInvoice failed (reverted). TxHash: {TxHash}",
+        //                receipt.TransactionHash);
 
-                    return null;
-                }
-            }
-            catch (SmartContractRevertException revertEx)
-            {
-                _logger.LogError(
-                    revertEx,
-                    "Contract revert error during createQuickInvoice: {Message}",
-                    revertEx.Message);
+        //            return null;
+        //        }
+        //    }
+        //    catch (SmartContractRevertException revertEx)
+        //    {
+        //        _logger.LogError(
+        //            revertEx,
+        //            "Contract revert error during createQuickInvoice: {Message}",
+        //            revertEx.Message);
 
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Unexpected error during createQuickInvoice.");
+        //        return null;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(
+        //            ex,
+        //            "Unexpected error during createQuickInvoice.");
 
-                return null;
-            }
-        }
+        //        return null;
+        //    }
+        //}
 
 
-        /// <summary>
-        /// Executes the <c>createOrderedInvoices</c> function on the blockchain contract.
-        /// Registers multiple invoices in a single transaction.
-        /// Returns transaction hash if successful; otherwise logs and returns null.
-        /// </summary>
-        public async Task<string> CreateMultipleInvoicesAsync(
-            List<CreateMultipleInvoicesUpdate> invoices, string ownerAddress)
-        {
-            if (invoices == null || invoices.Count == 0)
-                throw new BadRequestException("Invoices list is empty.");
+        ///// <summary>
+        ///// Executes the <c>createOrderedInvoices</c> function on the blockchain contract.
+        ///// Registers multiple invoices in a single transaction.
+        ///// Returns transaction hash if successful; otherwise logs and returns null.
+        ///// </summary>
+        //public async Task<string> CreateMultipleInvoicesAsync(
+        //    List<CreateMultipleInvoicesUpdate> invoices, string ownerAddress)
+        //{
+        //    if (invoices == null || invoices.Count == 0)
+        //        throw new BadRequestException("Invoices list is empty.");
 
-            try
-            {
-                var ids = new List<byte[]>();
-                var tokens = new List<string>();
-                var usdAmounts = new List<BigInteger>();
-                var unlockTimes = new List<BigInteger>();
+        //    try
+        //    {
+        //        var ids = new List<byte[]>();
+        //        var tokens = new List<string>();
+        //        var usdAmounts = new List<BigInteger>();
+        //        var unlockTimes = new List<BigInteger>();
 
-                foreach (var invoice in invoices)
-                {
-                    if (string.IsNullOrEmpty(invoice.Id))
-                        throw new BadRequestException("Invoice ID is null or empty.");
+        //        foreach (var invoice in invoices)
+        //        {
+        //            if (string.IsNullOrEmpty(invoice.Id))
+        //                throw new BadRequestException("Invoice ID is null or empty.");
 
-                    if (string.IsNullOrEmpty(invoice.TokenAddress))
-                        throw new BadRequestException("Token address is null or empty.");
+        //            if (string.IsNullOrEmpty(invoice.TokenAddress))
+        //                throw new BadRequestException("Token address is null or empty.");
 
-                    if (invoice.USDTAmount <= 0)
-                        throw new BadRequestException("USDT amount must be greater than zero.");
+        //            if (invoice.USDTAmount <= 0)
+        //                throw new BadRequestException("USDT amount must be greater than zero.");
 
-                    ids.Add(HexToByteArray32(invoice.Id));
-                    tokens.Add(invoice.TokenAddress);
-                    usdAmounts.Add(ConvertToWei(invoice.USDTAmount, 18));
+        //            ids.Add(HexToByteArray32(invoice.Id));
+        //            tokens.Add(invoice.TokenAddress);
+        //            usdAmounts.Add(ConvertToWei(invoice.USDTAmount, 18));
 
-                    unlockTimes.Add(
-                        new BigInteger(
-                            new DateTimeOffset(invoice.UnLockTime).ToUnixTimeSeconds()
-                        )
-                    );
-                }
+        //            unlockTimes.Add(
+        //                new BigInteger(
+        //                    new DateTimeOffset(invoice.UnLockTime).ToUnixTimeSeconds()
+        //                )
+        //            );
+        //        }
 
-                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
-                var function = contract.GetFunction("createOrderedInvoices");
+        //        var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+        //        var function = contract.GetFunction("createOrderedInvoices");
 
-                var gasPrice = await GetOptimalGasPriceAsync();
-                var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
-                    _settings.GetDefaultGasLimit());
+        //        var gasPrice = await GetOptimalGasPriceAsync();
+        //        var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
+        //            _settings.GetDefaultGasLimit());
 
-                var receipt = await function.SendTransactionAndWaitForReceiptAsync(
-                    from: _account.Address,
-                    gas: gas,
-                    gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
-                    value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
-                    functionInput: new object[]
-                    {
-                ownerAddress,
-                ids.ToArray(),
-                tokens.ToArray(),
-                usdAmounts.ToArray(),
-                unlockTimes.ToArray()
-                    }
-                );
+        //        var receipt = await function.SendTransactionAndWaitForReceiptAsync(
+        //            from: _account.Address,
+        //            gas: gas,
+        //            gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
+        //            value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
+        //            functionInput: new object[]
+        //            {
+        //        ownerAddress,
+        //        ids.ToArray(),
+        //        tokens.ToArray(),
+        //        usdAmounts.ToArray(),
+        //        unlockTimes.ToArray()
+        //            }
+        //        );
 
-                if (receipt.Status.Value == 1)
-                {
-                    _logger.LogInformation(
-                        "CreateMultipleInvoices successful. TxHash: {TxHash}",
-                        receipt.TransactionHash);
+        //        if (receipt.Status.Value == 1)
+        //        {
+        //            _logger.LogInformation(
+        //                "CreateMultipleInvoices successful. TxHash: {TxHash}",
+        //                receipt.TransactionHash);
 
-                    return receipt.TransactionHash;
-                }
-                else
-                {
-                    _logger.LogError(
-                        "CreateMultipleInvoices failed (reverted). TxHash: {TxHash}",
-                        receipt.TransactionHash);
+        //            return receipt.TransactionHash;
+        //        }
+        //        else
+        //        {
+        //            _logger.LogError(
+        //                "CreateMultipleInvoices failed (reverted). TxHash: {TxHash}",
+        //                receipt.TransactionHash);
 
-                    return null;
-                }
-            }
-            catch (SmartContractRevertException revertEx)
-            {
-                _logger.LogError(
-                    revertEx,
-                    "Contract revert error during createOrderedInvoices: {Message}",
-                    revertEx.Message);
+        //            return null;
+        //        }
+        //    }
+        //    catch (SmartContractRevertException revertEx)
+        //    {
+        //        _logger.LogError(
+        //            revertEx,
+        //            "Contract revert error during createOrderedInvoices: {Message}",
+        //            revertEx.Message);
 
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Unexpected error during createOrderedInvoices.");
+        //        return null;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(
+        //            ex,
+        //            "Unexpected error during createOrderedInvoices.");
 
-                return null;
-            }
-        }
+        //        return null;
+        //    }
+        //}
 
 
         /// <summary>

@@ -18,19 +18,7 @@ namespace SLT.Api.Controllers.V1
     public class OrderController(IOrderService _orderService , PriceStorage priceStorage) : ApiBaseController
     {
 
-        [HttpPost("[action]")]
-        [CustomRateLimit]
-        [Authorize(RequireActiveUser = true)]
-        [SwaggerOperation(Summary = "Create quick order", Tags = ["Order"])]
-        public async Task<OrderFullResult> CreateQuickOrderAsync(
-            CreateQuickInvoiceUpdate update)
-        {
 
-            return await _orderService.CreateQuickOrderAsync(
-                update,
-                WalletAddress
-            );
-        }
 
         [HttpPost("[action]")]
         [CustomRateLimit]
@@ -46,18 +34,7 @@ namespace SLT.Api.Controllers.V1
             );
         }
 
-        [HttpPost("[action]")]
-        [CustomRateLimit]
-        [Authorize(RequireActiveUser = true)]
-        [SwaggerOperation(Summary = "Create multi step order", Tags = ["Order"])]
-        public async Task<OrderFullResult> CreateMultiStepOrderAsync(
-            CreateMultiStepOrderUpdate update)
-        {
-            return await _orderService.CreateMultiStepOrderAsync(
-                update,
-                WalletAddress
-            );
-        }
+     
         [HttpPost("[action]")]
         [CustomRateLimit]
         [Authorize(RequireActiveUser = true)]

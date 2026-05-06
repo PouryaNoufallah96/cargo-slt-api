@@ -7,8 +7,8 @@ namespace SLT.Services._BlockChain
     {
 
 
-        Task<string> CreateQuickInvoiceAsync(string id, string tokenAddress, decimal usdtAmount,string ownerAddress);
-        Task<string> CreateMultipleInvoicesAsync(List<CreateMultipleInvoicesUpdate> invoices, string ownerAddress); 
+        //Task<string> CreateQuickInvoiceAsync(string id, string tokenAddress, decimal usdtAmount,string ownerAddress);
+        //Task<string> CreateMultipleInvoicesAsync(List<CreateMultipleInvoicesUpdate> invoices, string ownerAddress); 
         Task<string> DeleteMultipleInvoicesAsync(List<string> invoicesId);  
         Task<string> DeleteSingleInvoiceAsync(string invoiceId);   
 

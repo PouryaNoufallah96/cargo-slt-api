@@ -9,8 +9,7 @@ namespace SLT.Services._Order
         Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress);
         Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
 
-        Task<OrderFullResult> CreateQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress);
-        Task<OrderFullResult> CreateMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
+
         Task<OrderListResult> GetOrderListAsync(GetPendingOrderListUpdate update, string walletAddress);
         Task<OrderFullResult> GetOrderDetailAsync(OrderIdUpdate update, string walletAddress);
         Task<OrderTotalReportResult> GetTotalReportAsync(string walletAddress);
@@ -26,3 +25,5 @@ namespace SLT.Services._Order
         Task RemoveNotRegisteredOrdersAsync(); 
     }
 }
+//Task<OrderFullResult> CreateQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress);
+//Task<OrderFullResult> CreateMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
