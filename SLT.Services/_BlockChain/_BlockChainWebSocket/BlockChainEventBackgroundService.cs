@@ -421,6 +421,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     }
                 );
 
+                    _lastEventReceived = DateTime.UtcNow;
+                
             }
             catch (Exception ex)
             {
@@ -470,6 +472,9 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         EventType = Domain.Collections.BlockchainEventType.InvoicePaid
                     }
                 );
+
+                _lastEventReceived = DateTime.UtcNow;
+
 
                 lock (_blockLock)
                 {
