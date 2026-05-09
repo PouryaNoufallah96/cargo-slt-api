@@ -36,7 +36,9 @@ services:
       # Blockchain
       - BlockChainSettings__RpcUrl=$blockchainsettings_rpc_url
       - BlockChainSettings__RpcUrl2=$blockchainsettings_rpc_url2
+      - BlockChainSettings__ERC20RpcUrl=$blockchainsettings_erc_rpc
       - BlockChainSettings__ContractAddress=$blockchainsettings_contract_address
+      - BlockChainSettings__ERC20ContractAddress=$blockchainsettings_erc_contract_address
       - BlockChainSettings__PrivateKey=$blockchainsettings_private_key
       - BlockChainSettings__PublicAddress=$blockchainsettings_public_address
       - BlockChainSettings__ChainId=$blockchainsettings_chain_id
@@ -49,7 +51,9 @@ services:
       # Blockchain WebSocket
       - BlockchainWebSocketSetting__WsUrl=$blockchainwebsocketsetting_ws_url
       - BlockchainWebSocketSetting__WsUrl2=$blockchainwebsocketsetting_ws_url2
+      - BlockchainWebSocketSetting__ERC20WsUrl=$blockchainwebsocketsetting_erc_ws_url
       - BlockchainWebSocketSetting__ContractAddress=$blockchainwebsocketsetting_contract_address
+      - BlockchainWebSocketSetting__ERC20ContractAddress=$blockchainwebsocketsetting_erc_contract_address
       - BlockchainWebSocketSetting__ReconnectInterval=$blockchainwebsocketsetting_reconnect_interval
       - BlockchainWebSocketSetting__MaxReconnectAttempts=$blockchainwebsocketsetting_max_reconnect_attempts
       - BlockchainWebSocketSetting__HeartbeatInterval=$blockchainwebsocketsetting_heartbeat_interval
