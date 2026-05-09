@@ -8,7 +8,7 @@ namespace SLT.Services._TransactionLog
 
         Task CreateInvoiceCreatedAsync(InvoiceCreatedLog log);
         Task CreateInvoicePaidAsync(InvoicePaidLog log);
-        Task<BigInteger> GetLastCheckedBlockNumberAsync();
+        Task<BigInteger> GetLastCheckedBlockNumberAsync(string network);
 
 
     }

@@ -58,6 +58,7 @@ namespace SLT.Services._TransactionLog
                     Status = TransactionStatus.Confirmed,
                     Wallet = owner,
                     TokenAddress = log.Address,
+                    Network = log.Network,
                    
                 };
 
@@ -118,6 +119,7 @@ namespace SLT.Services._TransactionLog
                     Status = TransactionStatus.Confirmed,
                     Wallet = log.Address,
                     TokenAddress = log.Address,
+                    Network = log.Network
                 };
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
@@ -152,11 +154,12 @@ namespace SLT.Services._TransactionLog
         /// use to get last checked block number for transaction confirmation
         /// </summary>
         /// <returns></returns>
-        public async Task<BigInteger> GetLastCheckedBlockNumberAsync()
+        public async Task<BigInteger> GetLastCheckedBlockNumberAsync(string network)
         {
             var lastBlock = await _transactionLogRepository
              .AsQueryable()
-             .Where(h => h.EventType == BlockchainEventType.TransactionConfirmed)
+             .Where(q => q.Network == network)
+             .Where(h => h.EventType == BlockchainEventType.InvoiceCreated)
              .OrderByDescending(b => b)
              .FirstOrDefaultAsync();
             if(lastBlock == null)

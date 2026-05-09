@@ -7,6 +7,7 @@ using Nethereum.Util;
 using SLT.Domain.Collections;
 using SLT.Domain.Repositories.Contracts;
 using SLT.Services._User.DTOs.Results;
+using SLT.Services._User.DTOs.Settings;
 using SLT.Services._User.DTOs.Storages;
 using SLT.Services._User.DTOs.Updates;
 using System.Security.Claims;
@@ -47,6 +48,7 @@ namespace SLT.Services._User
                 Nonce = newNonce,
                 WalletAddress = update.WalletAddress,
                 GeneratedMoment = DateTime.UtcNow,
+                NetworkType = update.NetworkType,
                 IP = ip,
             };
 
@@ -74,7 +76,7 @@ namespace SLT.Services._User
         {
             ValidateClientInfo(update.ClientId, update.ClientSecret);
 
-            var userAuthData = ValidateNonce(update.Nonce, update.WalletAddress);
+            var userAuthData = ValidateNonce(update.Nonce, update.WalletAddress, update.NetworkType);
 
             var message = $"Please sign this message to authenticate with SLT: {update.Nonce}";
             VerifySignature(message, update.Signature, userAuthData.WalletAddress);
@@ -83,7 +85,7 @@ namespace SLT.Services._User
 
             _userAuthStorage.RemoveItem(update.Nonce);
 
-            return Authenticate(user);
+            return Authenticate(user,update.NetworkType);
         }
 
 
@@ -135,7 +137,7 @@ namespace SLT.Services._User
                 Id = "guess"
             };
 
-            return Authenticate(user);
+            return Authenticate(user,NetworkType.BEP20);
         }
 
         /// <summary>
@@ -148,7 +150,7 @@ namespace SLT.Services._User
         {
 
             var result = new List<GetUserStatsResult>();
-             
+
             if (whois == "guess") return new GetUserStatsResult
             {
                 UserStatus = UserStatus.NotVerified,
@@ -182,7 +184,7 @@ namespace SLT.Services._User
         /// 2. The nonce has not expired (valid for 10 seconds from creation).
         /// 3. The provided wallet address matches the one originally associated with the nonce.
         /// </remarks>
-        private UserAuthData ValidateNonce(string Nonce, string walletAddress)
+        private UserAuthData ValidateNonce(string Nonce, string walletAddress, NetworkType networkType)
         {
             var userAuthData = _userAuthStorage.GetItem(Nonce) ?? throw new NonceNotFoundException();
 
@@ -194,6 +196,8 @@ namespace SLT.Services._User
 
             if (!string.Equals(userAuthData.WalletAddress, walletAddress, StringComparison.OrdinalIgnoreCase))
                 throw new BadRequestException("Wallet address mismatch for nonce");
+
+            if (userAuthData.NetworkType != networkType) throw new BadRequestException("network mismatch for nonce");
 
             return userAuthData;
         }
@@ -265,8 +269,8 @@ namespace SLT.Services._User
         /// <param name="tabletUniqeId"></param>
         /// <param name="tabletData"></param>
         /// <returns></returns>
-        private ActionResult Authenticate(User user)
-           => new JsonResult(_jwtService.Generate(GetClaimsAsync(user)));
+        private ActionResult Authenticate(User user, NetworkType networkType)
+           => new JsonResult(_jwtService.Generate(GetClaimsAsync(user,networkType)));
 
 
         /// <summary>
@@ -276,7 +280,7 @@ namespace SLT.Services._User
         /// <param name="tabletData"></param>
         /// <returns></returns>
         /// <exception cref="BaseException"></exception>
-        private IEnumerable<Claim> GetClaimsAsync(User user)
+        private IEnumerable<Claim> GetClaimsAsync(User user,NetworkType networkType)
         {
             try
             {
@@ -286,6 +290,7 @@ namespace SLT.Services._User
                  new(Claims.PublicKey.ToDisplay(),user.UserPublicKey.ToString()),
                  new(Claims.SecurityStamp.ToDisplay(),user.SecurityStamp.ToString()),
                  new(Claims.UserStatus.ToDisplay(),user.Status.ToString()),
+                 new(Claims.NetworkType.ToDisplay(),networkType == NetworkType.BEP20? "BEP20":"ERC20"),
                  new(Claims.UserType.ToDisplay(),user.Role == UserRole.Customer ? UserType.User.ToString() : UserType.Admin.ToString()),
              };
 

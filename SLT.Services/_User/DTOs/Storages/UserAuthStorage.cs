@@ -1,11 +1,12 @@
-﻿using System.Collections.Concurrent;
+﻿using SLT.Services._User.DTOs.Settings;
+using System.Collections.Concurrent;
 using static Utilities.Constants.RegisterMode;
 
 namespace SLT.Services._User.DTOs.Storages
 {
-    public class UserAuthStorage : ConcurrentDictionary<string, UserAuthData>, ISelfSingletonDependency 
+    public class UserAuthStorage : ConcurrentDictionary<string, UserAuthData>, ISelfSingletonDependency
     {
-        private const int CleanupInterval = 60_000; 
+        private const int CleanupInterval = 60_000;
         private readonly System.Timers.Timer _cleanupTimer;
         private readonly ConcurrentDictionary<string, object> _locks = new();
 
@@ -17,7 +18,8 @@ namespace SLT.Services._User.DTOs.Storages
         public UserAuthStorage()
         {
             _cleanupTimer = new System.Timers.Timer(CleanupInterval);
-            _cleanupTimer.Elapsed += (sender, args) => {
+            _cleanupTimer.Elapsed += (sender, args) =>
+            {
                 try { RemoveOldEntries(); }
                 catch (Exception)
                 {
@@ -75,6 +77,7 @@ namespace SLT.Services._User.DTOs.Storages
         public DateTime GeneratedMoment { get; set; } = DateTime.UtcNow;
         public string Nonce { get; set; }
         public string WalletAddress { get; set; }
+        public NetworkType NetworkType { get; set; }
         public bool IsVerified { get; set; } = false;
         public string IP { get; set; }
     }

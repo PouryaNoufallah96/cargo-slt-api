@@ -7,7 +7,8 @@
         UserType,
         SecurityStamp,
         UserStatus, 
-        WalletAddress
+        WalletAddress,
+        NetworkType 
     }
 
     public enum UserType

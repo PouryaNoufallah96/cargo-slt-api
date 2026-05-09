@@ -15,6 +15,8 @@ namespace SLT.Services._TransactionLog.DTOs
         public string Hash { get; set; }
         public BigInteger BlockNumber { get; set; }
         public BlockchainEventType EventType { get; set; }
+
+        public string Network { get; set; }
     }
 
 
@@ -30,6 +32,8 @@ namespace SLT.Services._TransactionLog.DTOs
         public string Hash { get; set; }
         public BigInteger BlockNumber { get; set; }
         public BlockchainEventType EventType { get; set; }
+        public string Network { get; set; }
+
 
     }
 }

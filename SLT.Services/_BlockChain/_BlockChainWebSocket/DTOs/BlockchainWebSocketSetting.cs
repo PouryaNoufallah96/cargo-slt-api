@@ -4,7 +4,9 @@
     {
         public string WsUrl { get; set; }
         public string WsUrl2 { get; set; }
+        public string ERC20WsUrl { get; set; }
         public string ContractAddress { get; set; }
+        public string ERC20ContractAddress { get; set; }
         public int ReconnectInterval { get; set; } = 5;
         public int MaxReconnectAttempts { get; set; } = 30;
         public int HeartbeatInterval { get; set; } = 30;

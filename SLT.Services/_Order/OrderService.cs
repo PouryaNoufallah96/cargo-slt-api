@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
+using Nethereum.Contracts.Standards.ERC20.TokenList;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Bcpg.OpenPgp;
 using Org.BouncyCastle.Utilities;
@@ -34,7 +35,7 @@ namespace SLT.Services._Order
         /// <param name="update"></param>
         /// <param name="walletAddress"></param>
         /// <returns></returns>
-        public async Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress)
+        public async Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress, string network)
         {
             var newOrder = new Order
             {
@@ -51,11 +52,14 @@ namespace SLT.Services._Order
 
             };
 
+            var tokenData = ValidateToken(update.TokenSymbol);
+            if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
+
 
             await _orderRepository.InsertOneAsync(newOrder);
             try
             {
-                var invoiceResult = await CreatePendingQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description);
+                var invoiceResult = await CreatePendingQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description, tokenData);
                 return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
             }
             catch (Exception ex)
@@ -75,10 +79,9 @@ namespace SLT.Services._Order
         /// <param name="desc"></param>
         /// <param name="dateOnly"></param>
         /// <returns></returns>
-        private async Task<InvoiceResult> CreatePendingQuickInvoiceAsync(Order order, string token, string desc, DateOnly? dateOnly = null)
+        private async Task<InvoiceResult> CreatePendingQuickInvoiceAsync(Order order, string token, string desc, AvailableTokenData tokenData, DateOnly? dateOnly = null)
         {
 
-            var tokenData = ValidateToken(token);
 
             var activeDate = dateOnly.HasValue
                 ? dateOnly.Value.ToDateTime(TimeOnly.MinValue)
@@ -89,6 +92,7 @@ namespace SLT.Services._Order
             {
                 InvoiceId = GenerateBytes32HexId(),
                 TokenSymbol = tokenData.Name,
+                TokenNetwork = tokenData.Network,
                 TokenAddress = tokenData.Address,
                 USDTAmount = order.TotalAmount,
                 USDTAmountInWei = _blockChainService.ConvertToWei(order.TotalAmount, 18).ToString(),
@@ -112,7 +116,7 @@ namespace SLT.Services._Order
         }
 
 
-        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress)
+        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress, string network)
         {
             if (update == null)
                 throw new BadRequestException(nameof(update));
@@ -124,6 +128,13 @@ namespace SLT.Services._Order
             if (invoicesTotal != update.TotalAmount)
                 throw new BadRequestException(
                     "Sum of invoice amounts does not match order total amount.");
+
+            foreach (var invoice in update.Invoices)
+            {
+                var tokenData = ValidateToken(invoice.TokenSymbol);
+                if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
+            }
+
 
             var newOrder = new Order
             {
@@ -185,6 +196,7 @@ namespace SLT.Services._Order
                 {
                     InvoiceId = GenerateBytes32HexId(),
                     TokenSymbol = tokenData.Name,
+                    TokenNetwork = tokenData.Network,
                     TokenAddress = tokenData.Address,
                     USDTAmount = invoiceUpdate.Amount,
                     USDTAmountInWei = _blockChainService
@@ -257,7 +269,7 @@ namespace SLT.Services._Order
 
             var options = new FindOneAndUpdateOptions<Invoice>
             {
-                ReturnDocument = ReturnDocument.After 
+                ReturnDocument = ReturnDocument.After
             };
 
             var updatedInvoice = await _invoiceRepository
@@ -304,7 +316,7 @@ namespace SLT.Services._Order
 
             try
             {
-                await SyncOrderWithOrderIdAsync(invoice.OrderId);   
+                await SyncOrderWithOrderIdAsync(invoice.OrderId);
             }
             catch (Exception e)
             {
@@ -381,7 +393,7 @@ namespace SLT.Services._Order
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new BadRequestException("Wallet address is required.");
 
-            var query = _orderRepository.AsQueryable().Where(q=> q.State != OrderState.NotRegistered);
+            var query = _orderRepository.AsQueryable().Where(q => q.State != OrderState.NotRegistered);
 
 
             if (update.ListType == OrderListType.Received)
@@ -698,7 +710,18 @@ namespace SLT.Services._Order
                 throw new BadRequestException("There is paid invoice in order");
 
             var invoiceIds = invoices.Select(q => q.InvoiceId).ToList();
-            var txHash = await _blockChainService.DeleteMultipleInvoicesAsync(invoiceIds);
+
+            string txHash = null;
+
+            var tokenNetwork = invoices.Select(q => q.TokenNetwork).FirstOrDefault();
+            if (tokenNetwork == "ERC20")
+            {
+                txHash = await _blockChainService.DeleteERC20MultipleInvoicesAsync(invoiceIds);
+            }
+            else
+            {
+                txHash = await _blockChainService.DeleteMultipleInvoicesAsync(invoiceIds);
+            }
 
             if (string.IsNullOrEmpty(txHash))
                 throw new BadRequestException("Blockchain transaction failed");
@@ -743,6 +766,7 @@ namespace SLT.Services._Order
                 PayerWallet = invoice.PayerWallet,
                 OrderId = invoice.OrderId,
                 TokenSymbol = invoice.TokenSymbol,
+                TokenNetwork = invoice.TokenNetwork,
                 TokenAddress = invoice.TokenAddress,
                 USDTAmount = invoice.USDTAmount,
                 USDTAmountInWei = invoice.USDTAmountInWei,

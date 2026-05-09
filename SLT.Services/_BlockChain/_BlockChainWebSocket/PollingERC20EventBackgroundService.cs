@@ -14,7 +14,7 @@ using static Utilities.Constants.RegisterMode;
 
 namespace SLT.Services._BlockChain._BlockChainWebSocket
 {
-    public class PollingEventBackgroundService(
+    public class PollingERC20EventBackgroundService(
         ITransactionLogService transactionLogService,
         ILogger<PollingEventBackgroundService> _logger,
         BlockChainSettings _settings
@@ -25,10 +25,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            //_logger.LogInformation("------------------ Polling missing logs before subscription restart...");
+            //_logger.LogInformation("------------------ ERC20 Polling missing logs before subscription restart...");
 
             _lastProcessedBlock = await GetLastProcessedBlock(stoppingToken);
-            _logger.LogInformation($"BEP20 starting block is : {_lastProcessedBlock}");
+            _logger.LogInformation($"ERC20 polling starting block is : {_lastProcessedBlock}");
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -65,7 +65,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         return _lastProcessedBlock.ToHexBigInteger();
                 }
 
-                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync("BEP20");
+                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync("ERC20");
 
                 lock (_blockLock)
                 {
@@ -77,7 +77,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 try
                 {
-                    var _web3Client = new Web3(_settings.RpcUrl2);
+                    var _web3Client = new Web3(_settings.ERC20RpcUrl);
                     try
                     {
 
@@ -93,7 +93,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     {
                         try
                         {
-                            _web3Client = new Web3(_settings.RpcUrl);
+                            _web3Client = new Web3(_settings.ERC20RpcUrl);
                             var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                             lock (_blockLock)
                             {
@@ -128,7 +128,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         private async Task PollMissingLogsAsync(CancellationToken cancellationToken)
         {
-            var _web3Client = new Web3(_settings.RpcUrl2);
+            var _web3Client = new Web3(_settings.ERC20RpcUrl);
             BigInteger latestBlock = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
             if (_lastProcessedBlock >= latestBlock) return;
@@ -144,7 +144,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 {
                     FromBlock = new BlockParameter(new HexBigInteger(fromBlock)),
                     ToBlock = new BlockParameter(new HexBigInteger(toBlock)),
-                    Address = new[] { _settings.ContractAddress }
+                    Address = new[] { _settings.ERC20ContractAddress }
                 };
 
                 try
@@ -204,7 +204,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
                 _logger.LogInformation(
-                    "BEP20 InvoiceCreated | InvoiceId: {InvoiceId}, Creator: {Creator}, Token: {Token}, USD: {UsdAmount}",
+                    "ERC20 InvoiceCreated | InvoiceId: {InvoiceId}, Creator: {Creator}, Token: {Token}, USD: {UsdAmount}",
                     invoiceId,
                     eLog.Event.Creator,
                     eLog.Event.Token,
@@ -212,7 +212,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 );
 
                 SentrySdk.CaptureMessage(
-                    $"BEP20 InvoiceCreated | InvoiceId: {invoiceId}, Creator: {eLog.Event.Creator}, Token: {eLog.Event.Token}, USD: {eLog.Event.UsdAmount}"
+                    $"ERC20 InvoiceCreated | InvoiceId: {invoiceId}, Creator: {eLog.Event.Creator}, Token: {eLog.Event.Token}, USD: {eLog.Event.UsdAmount}"
                 );
 
                 var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
@@ -230,9 +230,17 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         UsdAmount = Web3.Convert.FromWei(eLog.Event.UsdAmount),
                         UnLockTime = unlockDate,
                         EventType = Domain.Collections.BlockchainEventType.InvoiceCreated,
-                        Network = "BEP20"
+                        Network = "ERC20"
                     }
                 );
+
+                lock (_blockLock)
+                {
+                    _lastProcessedBlock = BigInteger.Max(
+                        _lastProcessedBlock,
+                        log.BlockNumber.Value + 1
+                    );
+                }
 
             }
             catch (Exception ex)
@@ -257,7 +265,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
                 _logger.LogInformation(
-                    "BEP20 InvoicePaid | InvoiceId: {InvoiceId}, Payer: {Payer}, Token: {Token}, PayAmount: {PayAmount}",
+                    "ERC20 InvoicePaid | InvoiceId: {InvoiceId}, Payer: {Payer}, Token: {Token}, PayAmount: {PayAmount}",
                     invoiceId,
                     eLog.Event.Payer,
                     eLog.Event.Token,
@@ -265,7 +273,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 );
 
                 SentrySdk.CaptureMessage(
-                    $"BEP20 InvoicePaid | InvoiceId: {invoiceId}, Payer: {eLog.Event.Payer}, Token: {eLog.Event.Token}, PayAmount: {eLog.Event.PayAmount}"
+                    $"ERC20 InvoicePaid | InvoiceId: {invoiceId}, Payer: {eLog.Event.Payer}, Token: {eLog.Event.Token}, PayAmount: {eLog.Event.PayAmount}"
                 );
 
                 var payAmountDecimal = Web3.Convert.FromWei(eLog.Event.PayAmount);
@@ -281,17 +289,11 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         Token = eLog.Event.Token,
                         PayAmount = payAmountDecimal,
                         EventType = Domain.Collections.BlockchainEventType.InvoicePaid,
-                        Network = "BEP20"
+                        Network = "ERC20"
                     }
                 );
 
-                lock (_blockLock)
-                {
-                    _lastProcessedBlock = BigInteger.Max(
-                        _lastProcessedBlock,
-                        log.BlockNumber.Value + 1
-                    );
-                }
+               
             }
             catch (Exception ex)
             {
@@ -326,7 +328,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             if (bytes.Length != 32)
                 throw new ArgumentException("Input must be exactly 32 bytes for bytes32");
 
-            return  bytes.ToHex();
+            return bytes.ToHex();
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)

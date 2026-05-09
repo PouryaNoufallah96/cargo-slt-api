@@ -18,6 +18,7 @@ namespace SLT.Services._Order.DTOs.Results
         public string PayerWallet { get; set; }
         public string OrderId { get; set; }
         public string TokenSymbol { get; set; }
+        public string TokenNetwork { get; set; }
         public string TokenAddress { get; set; }
         public decimal USDTAmount { get; set; }
         public string USDTAmountInWei { get; set; }

@@ -18,8 +18,6 @@ namespace SLT.Api.Controllers.V1
     public class OrderController(IOrderService _orderService , PriceStorage priceStorage) : ApiBaseController
     {
 
-
-
         [HttpPost("[action]")]
         [CustomRateLimit]
         [Authorize(RequireActiveUser = true)]
@@ -30,7 +28,8 @@ namespace SLT.Api.Controllers.V1
 
             return await _orderService.CreatePendingQuickOrderAsync(
                 update,
-                WalletAddress
+                WalletAddress,
+                NetworkType
             );
         }
 
@@ -44,7 +43,8 @@ namespace SLT.Api.Controllers.V1
         {
             return await _orderService.CreatePendingMultiStepOrderAsync(
                 update,
-                WalletAddress
+                WalletAddress,
+                NetworkType
             );
         }
 

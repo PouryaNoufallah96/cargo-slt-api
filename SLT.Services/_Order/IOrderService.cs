@@ -6,8 +6,8 @@ namespace SLT.Services._Order
     public interface IOrderService
     {
 
-        Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress);
-        Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress);
+        Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress,string network);
+        Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress,string network);
 
 
         Task<OrderListResult> GetOrderListAsync(GetPendingOrderListUpdate update, string walletAddress);

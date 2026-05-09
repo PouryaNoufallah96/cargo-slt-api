@@ -15,7 +15,8 @@ namespace SLT.Domain.Collections
         public string TokenAddress { get; set; }
         public decimal BlockNumber { get; set; }
         public BlockchainEventType EventType { get; set; } 
-        public TransactionStatus Status { get; set; } 
+        public TransactionStatus Status { get; set; }
+        public string Network { get; set; }         
 
     }
 

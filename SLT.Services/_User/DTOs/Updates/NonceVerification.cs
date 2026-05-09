@@ -1,4 +1,5 @@
-﻿using Utilities.Attributes;
+﻿using SLT.Services._User.DTOs.Settings;
+using Utilities.Attributes;
 
 namespace SLT.Services._User.DTOs.Updates
 {
@@ -9,5 +10,6 @@ namespace SLT.Services._User.DTOs.Updates
         [StringInputValidation] public string WalletAddress { get; set; }
         [StringInputValidation] public string ClientId { get; set; }
         [StringInputValidation] public string ClientSecret { get; set; }
+        [EnumInputValidation(IsRequired = true)] public NetworkType NetworkType { get; set; }
     }
 }
