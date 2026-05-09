@@ -30,35 +30,9 @@ namespace SLT.Services._Price
 
         public async Task<PriceResult> FetchTokenPriceAsync(string tokenName)
         {
-            string url = $"{_callPriceSettings.BaseUrl}/tokens/symbol/{tokenName.ToUpper()}/price";
-
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Add("Authorization", _callPriceSettings.ApiKey); 
-                request.Headers.Add("Accept", "application/json");
-
-                var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-
-                var jsonString = await response.Content.ReadAsStringAsync();
-                using JsonDocument doc = JsonDocument.Parse(jsonString);
-
-                var status = doc.RootElement.GetProperty("status").GetString();
-                if (status != "success")
-                    return null;
-
-                var data = doc.RootElement.GetProperty("data");
-
-                decimal price = decimal.Parse(data.GetProperty("price").GetString()!);
-                string tokenSymbol = data.GetProperty("symbol").GetString()!;
-
-                return new PriceResult
-                {
-                    TokenName = tokenSymbol,
-                    Price = price,
-                    TokenNetwork = "BSC"
-                };
+                return await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
             }
             catch (Exception ex)
             {
@@ -120,7 +94,13 @@ namespace SLT.Services._Price
         public async Task<PriceResult> FetchTokenPriceFromGeckoTerminalAsync(string tokenName, string poolId = null)
         {
             var pool = poolId == null ? _availableTokenDatas.FirstOrDefault(q => q.Name == tokenName.ToUpper()).PoolId : poolId;
+
             string url = $"https://api.geckoterminal.com/api/v2/networks/bsc/pools/{pool}";
+
+            if(pool == "0x935dce0d9cbbf2915cc4b5ec6bfd665e450c3854")
+            {
+                url = $"https://api.geckoterminal.com/api/v2/networks/eth/pools/{pool}";
+            }
 
             try
             {
