@@ -1,16 +1,19 @@
-﻿using Utilities.Exceptions.Common;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Nethereum.ABI.FunctionEncoding;
+using Nethereum.ABI.Model;
 using Nethereum.Contracts;
+using Nethereum.Hex.HexConvertors.Extensions;
 using Nethereum.Util;
 using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
 using SLT.Services._BlockChain._MultiCallService;
+using SLT.Services._BlockChain._MultiCallService.DTOs;
 using SLT.Services._BlockChain.DTOs.Settings;
+using SLT.Services._BlockChain.DTOs.Updates;
 using SLT.Services._Price.DTOs.Settings;
 using System.Numerics;
+using Utilities.Exceptions.Common;
 using static Utilities.Constants.RegisterMode;
-using SLT.Services._BlockChain.DTOs.Updates;
 
 namespace SLT.Services._BlockChain
 {
@@ -22,7 +25,8 @@ namespace SLT.Services._BlockChain
         private readonly ILogger<BlockChainService> _logger;
         private readonly IMultiCallService _multicallService;
         private readonly AvailableTokensSettings _availableTokenData;
-        private readonly Web3 _web3;
+        private readonly Web3 _bep20Web3;
+        private readonly Web3 _erc20Web3;
         private readonly Account _account;
         private readonly Contract _contract;
 
@@ -39,8 +43,9 @@ namespace SLT.Services._BlockChain
                 throw new InvalidOperationException("Blockchain private key is not configured.");
 
             _account = new Account(_settings.PrivateKey, _settings.ChainId);
-            _web3 = new Web3(_account, _settings.RpcUrl2);
-            _web3.TransactionManager.UseLegacyAsDefault = true;
+            _bep20Web3 = new Web3(_account, _settings.RpcUrl2);
+            _erc20Web3 = new Web3(_settings.ERC20RpcUrl);
+            _bep20Web3.TransactionManager.UseLegacyAsDefault = true;
         }
 
 
@@ -249,7 +254,7 @@ namespace SLT.Services._BlockChain
                     ids.Add(HexToByteArray32(id));
                 }
 
-                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var contract = _bep20Web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
                 var function = contract.GetFunction("deleteBatchInvoice");
 
                 var gasPrice = await GetOptimalGasPriceAsync();
@@ -326,7 +331,7 @@ namespace SLT.Services._BlockChain
                     ids.Add(HexToByteArray32(id));
                 }
 
-                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ERC20ContractAddress);
+                var contract = _bep20Web3.Eth.GetContract(ContractAbi, _settings.ERC20ContractAddress);
                 var function = contract.GetFunction("deleteBatchInvoice");
 
                 var gasPrice = await GetOptimalGasPriceAsync();
@@ -379,6 +384,103 @@ namespace SLT.Services._BlockChain
                 return null;
             }
         }
+
+
+
+
+        public async Task<decimal> GetBEP20WalletAddressSingleTokenBalanceAsync(string walletAddress, string tokenName)
+        {
+
+            var token = ValidateToken(tokenName,"BEP20");
+            if (token == null)
+                throw new ArgumentException($"Token '{tokenName}' not found in available tokens.");
+
+            var erc20Contract = _bep20Web3.Eth.GetContract(ERC20Abi, token.Address);
+            var balanceOfFunction = erc20Contract.GetFunction("balanceOf");
+            var callData = balanceOfFunction.GetData(walletAddress).HexToByteArray();
+
+            var calls = new List<MulticallCall>
+            {
+                new MulticallCall
+                {
+                    Target = token.Address,
+                    CallData = callData
+                }
+            };
+
+            var returnDataList = await _multicallService.ExecuteCallsAsync(calls);
+
+            if (returnDataList == null || returnDataList.Count == 0 || returnDataList[0] == null)
+                return 0;
+
+            try
+            {
+                var parameterDecoder = new ParameterDecoder();
+                var parameters = parameterDecoder.DecodeDefaultData(
+                    returnDataList[0],
+                    new Parameter("uint256", "balance"));
+
+                var rawBalance = (BigInteger)parameters[0].Result;
+
+                var balance = UnitConversion.Convert.FromWei(rawBalance, token.PriceDecimalPlaces);
+
+                return balance;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error decoding token balance for {token.Name}: {ex.Message}");
+                throw new BaseException("An error happened When getting wallet balance!");
+            }
+        }
+
+        public async Task<decimal> GetERC20WalletAddressSingleTokenBalanceAsync(string walletAddress, string tokenName)
+        {
+
+            var token = ValidateToken(tokenName, "ERC20");
+            if (token == null)
+                throw new BadRequestException($"Token '{tokenName}' not found in available tokens.");
+
+            var erc20Contract = _erc20Web3.Eth.GetContract(ERC20Abi, token.Address);
+            var balanceOfFunction = erc20Contract.GetFunction("balanceOf");
+            var callData = balanceOfFunction.GetData(walletAddress).HexToByteArray();
+
+            var calls = new List<MulticallCall>
+            {
+                new MulticallCall
+                {
+                    Target = token.Address,
+                    CallData = callData
+                }
+            };
+
+            var returnDataList = await _multicallService.ExecuteCallsAsync(calls);
+
+            if (returnDataList == null || returnDataList.Count == 0 || returnDataList[0] == null)
+                return 0;
+
+            try
+            {
+                var parameterDecoder = new ParameterDecoder();
+                var parameters = parameterDecoder.DecodeDefaultData(
+                    returnDataList[0],
+                    new Parameter("uint256", "balance"));
+
+                var rawBalance = (BigInteger)parameters[0].Result;
+
+                var balance = UnitConversion.Convert.FromWei(rawBalance, token.PriceDecimalPlaces);
+
+                return balance;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error decoding token balance for {token.Name}: {ex.Message}");
+                throw new BaseException("An error happened When getting wallet balance!");
+            }
+        }
+
+
+
+
 
 
         ///// <summary>
@@ -450,18 +552,27 @@ namespace SLT.Services._BlockChain
         //    }
         //}
 
-
-        private AvailableTokenData ValidateToken(string tokenName)
+        private AvailableTokenData ValidateToken(string tokenName, string network = null)
         {
 
             if (tokenName == null)
                 throw new BadRequestException($"Unsupported token name! {tokenName}");
 
-            var tokenData = _availableTokenData.FirstOrDefault(q => q.Name.Equals(tokenName, StringComparison.OrdinalIgnoreCase))
-                ?? throw new BadRequestException($"Unsupported token name! {tokenName}");
-            return tokenData;
-        }
+            if (network == null)
+            {
+                var tokenData = _availableTokenData.FirstOrDefault(q => q.Name.Equals(tokenName, StringComparison.OrdinalIgnoreCase))
+                 ?? throw new BadRequestException($"Unsupported token name! {tokenName}");
+                return tokenData;
+            }
+            else
+            {
+                var tokenData = _availableTokenData.FirstOrDefault(q => q.Name.Equals(tokenName, StringComparison.OrdinalIgnoreCase) && q.Network == network)
+                 ?? throw new BadRequestException($"Unsupported token name and network! {tokenName}");
+                return tokenData;
 
+            }
+
+        }
 
         #region Utility Methods (Unchanged)
         public BigInteger ConvertToWei(decimal amount, int decimals = 18)
@@ -499,7 +610,7 @@ namespace SLT.Services._BlockChain
         {
             try
             {
-                var currentGasPrice = await _web3.Eth.GasPrice.SendRequestAsync();
+                var currentGasPrice = await _bep20Web3.Eth.GasPrice.SendRequestAsync();
 
                 var suggestedGasPrice = (BigInteger)((decimal)currentGasPrice.Value * 1.2m);
 

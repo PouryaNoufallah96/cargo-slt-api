@@ -65,7 +65,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         return _lastProcessedBlock.ToHexBigInteger();
                 }
 
-                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync("ERC20");
+                var lastDbBlock = await transactionLogService.GetInvoiceLastCheckedBlockNumberAsync("ERC20");
 
                 lock (_blockLock)
                 {

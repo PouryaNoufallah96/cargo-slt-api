@@ -8,7 +8,9 @@ namespace SLT.Services._BlockChain.DTOs.Settings
         public string RpcUrl2 { get; set; }
         public string ERC20RpcUrl { get; set; }
         public string ContractAddress { get; set; }
-        public string ERC20ContractAddress { get; set; } 
+        public string ERC20ContractAddress { get; set; }
+        public string BEP20StakeContractAddress{ get; set; }
+        public string ERC20StakeContractAddress{ get; set; } 
         public string PrivateKey { get; set; }
         public string PublicAddress { get; set; }
         public long ChainId { get; set; }

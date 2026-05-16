@@ -21,7 +21,7 @@ namespace SLT.Services._Price
         private decimal _cachedBnbPrice = 300m;
         private DateTime _lastBnbPriceUpdate = DateTime.MinValue;
 
-        public async Task<PriceResult> FetchTokenPriceForShieldAsync(string tokenName)
+        public async Task<PriceResult> FetchSingleTokenPriceAsync(string tokenName)
         {
             var priceData = _priceStorage.GetPrice(tokenName.ToUpper());
             if (priceData != null && priceData.Price != null) return priceData.Price;

@@ -4,19 +4,26 @@ using MongoDB.Driver.Linq;
 using SLT.Domain.Collections;
 using SLT.Domain.Repositories.Contracts;
 using SLT.Services._Order;
+using SLT.Services._Stake;
 using SLT.Services._TransactionLog._Hub;
 using SLT.Services._TransactionLog.DTOs;
+using SLT.Services._Withdrawal;
 using System.Numerics;
+using System.Text.Json;
 using static Utilities.Constants.RegisterMode;
 
 namespace SLT.Services._TransactionLog
 {
     public class TransactionLogService(ITransactionLogRepository _transactionLogRepository,
+        IStakeService _stakeService,
         IHubContext<WalletNotifyHub> _hubContext,
+        IWithdrawalService _withdrawalService,
         IOrderService _orderService,
         ILogger<TransactionLogService> _logger) : ITransactionLogService, IScopedDependency
     {
 
+
+        #region Invoice
         /// <summary>
         /// use for creating invoice created log
         /// </summary>
@@ -59,7 +66,7 @@ namespace SLT.Services._TransactionLog
                     Wallet = owner,
                     TokenAddress = log.Address,
                     Network = log.Network,
-                   
+
                 };
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
@@ -137,10 +144,10 @@ namespace SLT.Services._TransactionLog
                 }
                 catch (Exception)
                 {
-                  _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId} to wallet {Wallet}.", log.InvoiceId, log.Payer);
+                    _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId} to wallet {Wallet}.", log.InvoiceId, log.Payer);
                 }
 
-              
+
             }
             catch (Exception ex)
             {
@@ -149,12 +156,11 @@ namespace SLT.Services._TransactionLog
         }
 
 
-
         /// <summary>
         /// use to get last checked block number for transaction confirmation
         /// </summary>
         /// <returns></returns>
-        public async Task<BigInteger> GetLastCheckedBlockNumberAsync(string network)
+        public async Task<BigInteger> GetInvoiceLastCheckedBlockNumberAsync(string network)
         {
             var lastBlock = await _transactionLogRepository
              .AsQueryable()
@@ -162,12 +168,263 @@ namespace SLT.Services._TransactionLog
              .Where(h => h.EventType == BlockchainEventType.InvoiceCreated)
              .OrderByDescending(b => b)
              .FirstOrDefaultAsync();
-            if(lastBlock == null)
+            if (lastBlock == null)
             {
                 return BigInteger.Zero;
             }
 
             return new BigInteger(lastBlock.BlockNumber);
+        }
+        #endregion
+
+
+
+        #region Stake
+
+        public async Task CreateDepositCreatedLogAsync(DepositCreatedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.DepositCreated)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate DepositCreated log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.DepositCreated,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+                    InvoiceId = input.DepositId,
+                    TokenAddress = input.Token,
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _stakeService.ActivateStakeAsync(input.DepositId, input.Hash);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating DepositCreated transaction log.");
+            }
+        }
+
+        public async Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.EarlyWithdrawn)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate EarlyWithdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.EarlyWithdrawn,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    InvoiceId = input.DepositId,
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _withdrawalService.CreateEarlyWithdrawnByEventAsync(input.DepositId, input.Hash, input.WithdrawAmount, input.ProfitAmount, input.ClaimedProfitAmount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating EarlyWithdrawn transaction log.");
+            }
+        }
+
+        public async Task CreateProfitWithdrawnLogAsync(ProfitWithdrawnLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.ProfitWithdrawn)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate ProfitWithdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.ProfitWithdrawn,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    InvoiceId = input.DepositId,
+                    TokenAddress = input.Token,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _withdrawalService.CreateProfitWithdrawaByEventAsycn(input.DepositId, input.Profit, input.Hash);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating ProfitWithdrawn transaction log.");
+            }
+        }
+
+        public async Task CreateWithdrawnLogAsync(WithdrawnLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.WithdrawnAll)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate Withdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.WithdrawnAll,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    InvoiceId = input.DepositId,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _withdrawalService.CreateWithdrawnAllByEventAsync(input.DepositId, input.Hash, input.Principal, input.Profit);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating Withdrawn transaction log.");
+            }
+        }
+
+        public async Task<BigInteger> GetDepositLastCheckedBlockNumberAsync(string network = "BEP20")
+        {
+            var lastBlock = await _transactionLogRepository
+                .AsQueryable()
+                .Where(h =>
+                    h.Network == network &&
+                    (
+                        h.EventType == BlockchainEventType.DepositCreated
+                    ))
+                .OrderByDescending(b => b.BlockNumber)
+                .FirstOrDefaultAsync();
+
+            if (lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
+
+            return new BigInteger(lastBlock.BlockNumber);
+        }
+
+        #endregion
+
+
+        private string SerializeData<T>(T input)
+        {
+            object data = input switch
+            {
+                DepositCreatedLog x => new DepositCreatedData
+                {
+                    Depositor = x.Depositor,
+                    UnlocksAt = x.UnlocksAt,
+                    Profit = x.Profit,
+                    Principal = x.Principal,
+                    LockDuration = x.LockDuration
+                },
+
+                EarlyWithdrawnLog x => new EarlyWithdrawnData
+                {
+                    Depositor = x.Depositor,
+                    ClaimedProfitAmount = x.ClaimedProfitAmount,
+                    FinalPayoutAmount = x.FinalPayoutAmount,
+                    ProfitAmount = x.ProfitAmount,
+                    WithdrawAmount = x.WithdrawAmount
+                },
+
+                ProfitWithdrawnLog x => new ProfitWithdrawnData
+                {
+                    Depositor = x.Depositor,
+                    Profit = x.Profit
+                },
+
+                WithdrawnLog x => new WithdrawnData
+                {
+                    Depositor = x.Depositor,
+                    Principal = x.Principal,
+                    Profit = x.Profit,
+                    TotalPayout = x.TotalPayout
+                },
+
+                _ => throw new NotSupportedException($"No serializer defined for type {typeof(T).Name}")
+            };
+
+            return JsonSerializer.Serialize(data, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+        }
+
+        private T? DeserializeData<T>(string data)
+        {
+            if (string.IsNullOrWhiteSpace(data))
+                return default;
+
+            return JsonSerializer.Deserialize<T>(data, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
         }
 
     }

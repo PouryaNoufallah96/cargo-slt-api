@@ -8,8 +8,15 @@ namespace SLT.Services._TransactionLog
 
         Task CreateInvoiceCreatedAsync(InvoiceCreatedLog log);
         Task CreateInvoicePaidAsync(InvoicePaidLog log);
-        Task<BigInteger> GetLastCheckedBlockNumberAsync(string network);
+        Task<BigInteger> GetInvoiceLastCheckedBlockNumberAsync(string network);
 
+
+
+        Task CreateDepositCreatedLogAsync(DepositCreatedLog input);
+        Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input);
+        Task CreateProfitWithdrawnLogAsync(ProfitWithdrawnLog input);
+        Task CreateWithdrawnLogAsync(WithdrawnLog input);
+        Task<BigInteger> GetDepositLastCheckedBlockNumberAsync(string network = "BEP20");
 
     }
 }

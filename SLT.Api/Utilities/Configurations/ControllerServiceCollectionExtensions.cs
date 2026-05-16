@@ -2,6 +2,7 @@
 using SLT.Services._BlockChain._BlockChainWebSocket.DTOs;
 using SLT.Services._BlockChain.DTOs.Settings;
 using SLT.Services._Price.DTOs.Settings;
+using SLT.Services._Stake.DTOs.Settings;
 
 
 namespace SLT.Api.Utilities.Configurations
@@ -15,6 +16,7 @@ namespace SLT.Api.Utilities.Configurations
             services.RegisterSetting<BlockchainWebSocketSetting>(configuration.GetSection(nameof(BlockchainWebSocketSetting)));
             services.RegisterSetting<BlockChainSettings>(configuration.GetSection(nameof(BlockChainSettings)));
             services.RegisterSetting<CallPriceSettings>(configuration.GetSection(nameof(CallPriceSettings)));
+            services.RegisterSetting<StakeSetting>(configuration.GetSection(nameof(StakeSetting)));
         }
 
         private static void RegisterSetting<TSettings>(this IServiceCollection services, IConfigurationSection configuration)

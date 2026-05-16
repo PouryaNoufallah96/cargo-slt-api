@@ -1,4 +1,5 @@
-﻿using Utilities.Attributes;
+﻿using MongoDB.Bson.Serialization.Attributes;
+using Utilities.Attributes;
 using Utilities.MongoDatabase.Documents;
 
 namespace SLT.Domain.Collections
@@ -7,16 +8,17 @@ namespace SLT.Domain.Collections
     public class TransactionLog : BaseDocument
     {
         public string TransactionLogId { get; set; } = Guid.NewGuid().ToString("N");
-        public string InvoiceId { get; set; }
-        public string Wallet { get; set; } 
+        public string InvoiceId { get; set; } // use as reference field 
+        public string Wallet { get; set; }
         public decimal Amount { get; set; }
         public DateTime? UnlockTime { get; set; } = null;
         public string Hash { get; set; }
-        public string TokenAddress { get; set; }
+        public string TokenAddress { get; set; } = null;
         public decimal BlockNumber { get; set; }
-        public BlockchainEventType EventType { get; set; } 
+        public BlockchainEventType EventType { get; set; }
         public TransactionStatus Status { get; set; }
-        public string Network { get; set; }         
+        [BsonDefaultValue(null)] public string Data { get; set; } = null;
+        public string Network { get; set; }
 
     }
 
@@ -35,6 +37,10 @@ namespace SLT.Domain.Collections
         TransactionConfirmed,
         TransactionFailed,
         BlockMined,
-        NetworkStatus
+        NetworkStatus,
+        DepositCreated,
+        EarlyWithdrawn,
+        ProfitWithdrawn,
+        WithdrawnAll
     }
 }

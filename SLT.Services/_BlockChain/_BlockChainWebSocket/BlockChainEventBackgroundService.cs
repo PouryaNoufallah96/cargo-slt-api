@@ -26,13 +26,15 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         private readonly ITransactionLogService transactionLogService;
         private readonly ILogger<BlockChainEventBackgroundService> _logger;
         private readonly BlockchainWebSocketSetting _settings;
-        private BigInteger _lastProcessedBlock = 0;
+        private BigInteger _invoiceLastProcessedBlock = 0;
+        private BigInteger _stakeLastProcessedBlock = 0;
         private int _reconnectAttempts = 0;
         private DateTime _lastEventReceived = DateTime.UtcNow;
         private readonly SemaphoreSlim _reconnectLock = new(1, 1);
         private bool _isCleaningUp = false;
         private readonly SemaphoreSlim _cleanupLock = new(1, 1);
         private IDisposable _contractEventsSubscription;
+        private IDisposable _stakeContractEventsSubscription;
 
         private bool _useSecondaryWsUrl = false;
         private Web3 _web3;
@@ -57,9 +59,12 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            //_logger.LogInformation("Blockchain Event Service starting...");
-            _lastProcessedBlock = await GetLastProcessedBlock(stoppingToken);
-            _logger.LogInformation($"BEP20 starting block is : {_lastProcessedBlock}");
+            _invoiceLastProcessedBlock = await GetInvoiceLastProcessedBlock(stoppingToken);
+            _logger.LogInformation($"BEP20 invoices starting block is : {_invoiceLastProcessedBlock}");
+
+            _stakeLastProcessedBlock = await GetStakeLastProcessedBlock(stoppingToken);
+            _logger.LogInformation($"BEP20 stake side starting block is : {_stakeLastProcessedBlock}");
+
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -68,14 +73,12 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     await TryConnectWithRetryAsync(stoppingToken);
                     _lastEventReceived = DateTime.UtcNow;
 
-                    //_logger.LogInformation("-----------------------Successfully connected and subscribed to blockchain events");
 
                     while (_webSocketClient?.IsStarted == true && !stoppingToken.IsCancellationRequested)
                     {
                         var now = DateTime.UtcNow;
                         if ((now - _lastEventReceived).TotalMinutes > 2)
                         {
-                            //_logger.LogWarning("----------- No blockchain events received in the last 3 minutes {time}. Reconnecting...", now);
                             await Task.Delay(2000, stoppingToken);
                             await TryConnectWithRetryAsync(stoppingToken);
 
@@ -87,23 +90,19 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                     if (_webSocketClient != null && !_webSocketClient.IsStarted)
                     {
-                        //_logger.LogWarning("WebSocket stopped unexpectedly, reconnecting...");
                         await Task.Delay(2000, stoppingToken);
                     }
                 }
                 catch (OperationCanceledException)
                 {
-                    //_logger.LogInformation("Service shutdown requested");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    //_logger.LogError(ex, "Unexpected error in blockchain event service");
                     await Task.Delay(5000, stoppingToken);
                 }
             }
 
-            //_logger.LogInformation("Blockchain Event Service stopped.");
         }
 
         private async Task TryConnectWithRetryAsync(CancellationToken stoppingToken)
@@ -160,7 +159,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         private async Task ConnectAndSubscribe(CancellationToken cancellationToken)
         {
-            //_logger.LogInformation("...........ConnectAndSubscribe touched............");
 
 
             await CleanupConnection();
@@ -175,11 +173,14 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 await _webSocketClient.StartAsync();
 
                 await SubscribeToContractEventsAsync(cancellationToken);
-                _logger.LogInformation(" BEP20 ContractEvents subscription is active.");
+                await SubscribeToStakeContractEventsAsync(cancellationToken);
+
+
+                _logger.LogInformation("BEP20 subscriptions are active.");
+
             }
             catch (Exception ex)
             {
-                //_logger.LogError(ex, "Error connecting/subscribing. Will reconnect...");
                 throw;
             }
         }
@@ -188,7 +189,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             if (!await _cleanupLock.WaitAsync(0))
             {
-                //_logger.LogInformation("Cleanup already in progress, skipping...");
                 return;
             }
 
@@ -198,6 +198,9 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 _contractEventsSubscription?.Dispose();
                 _contractEventsSubscription = null;
+
+                _stakeContractEventsSubscription?.Dispose();
+                _stakeContractEventsSubscription = null;
 
                 if (_webSocketClient != null)
                 {
@@ -220,17 +223,17 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     }
                     catch (SemaphoreFullException ex)
                     {
-                        _logger.LogWarning(ex, "Ignoring SemaphoreFullException from WebSocket.Dispose()");
+                        //_logger.LogWarning(ex, "Ignoring SemaphoreFullException from WebSocket.Dispose()");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "WebSocket Dispose failed");
+                        //_logger.LogWarning(ex, "WebSocket Dispose failed");
                     }
 
                     _webSocketClient = null;
                 }
 
-                _logger.LogInformation("Cleanup completed successfully.");
+                //_logger.LogInformation("Cleanup completed successfully.");
             }
             catch (Exception ex)
             {
@@ -246,10 +249,13 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             var wss = _useSecondaryWsUrl ? _settings.WsUrl : _settings.WsUrl2;
             _useSecondaryWsUrl = !_useSecondaryWsUrl;
-            _logger.LogInformation("WebSocket URL : {Url}", wss);
+            //_logger.LogInformation("WebSocket URL : {Url}", wss);
             return wss;
         }
 
+
+
+        #region Invoice
 
         private async Task SubscribeToContractEventsAsync(CancellationToken cancellationToken)
         {
@@ -274,13 +280,13 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             var filter = new NewFilterInput
             {
                 Address = new[] { _settings.ContractAddress },
-                FromBlock = new BlockParameter(await GetLastProcessedBlock(cancellationToken))
+                FromBlock = new BlockParameter(await GetInvoiceLastProcessedBlock(cancellationToken))
             };
 
             await subscription.SubscribeAsync(filter);
         }
 
-        private async Task<HexBigInteger> GetLastProcessedBlock(CancellationToken cancellationToken)
+        private async Task<HexBigInteger> GetInvoiceLastProcessedBlock(CancellationToken cancellationToken)
         {
 
             try
@@ -289,19 +295,19 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 lock (_blockLock)
                 {
-                    if (_lastProcessedBlock > 0)
-                        return _lastProcessedBlock.ToHexBigInteger();
+                    if (_invoiceLastProcessedBlock > 0)
+                        return _invoiceLastProcessedBlock.ToHexBigInteger();
                 }
 
-                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync("BEP20");
+                var lastDbBlock = await transactionLogService.GetInvoiceLastCheckedBlockNumberAsync("BEP20");
 
                 lock (_blockLock)
                 {
-                    _lastProcessedBlock = lastDbBlock;
+                    _invoiceLastProcessedBlock = lastDbBlock;
                 }
 
-                if (_lastProcessedBlock > 0)
-                    return _lastProcessedBlock.ToHexBigInteger();
+                if (_invoiceLastProcessedBlock > 0)
+                    return _invoiceLastProcessedBlock.ToHexBigInteger();
 
                 try
                 {
@@ -312,7 +318,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                         lock (_blockLock)
                         {
-                            _lastProcessedBlock = latestBlockNumber;
+                            _invoiceLastProcessedBlock = latestBlockNumber;
                             return latestBlockNumber;
                         }
 
@@ -325,7 +331,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                             var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                             lock (_blockLock)
                             {
-                                _lastProcessedBlock = latestBlockNumber;
+                                _invoiceLastProcessedBlock = latestBlockNumber;
                                 return latestBlockNumber;
                             }
                         }
@@ -334,10 +340,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                             throw;
                         }
-                      
-                      
+
+
                     }
-                    
+
 
                 }
                 catch (Exception e)
@@ -354,12 +360,11 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-
         private async Task ProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
         {
             try
             {
-               
+
                 var created = log.DecodeEvent<InvoiceCreatedEventDTO>();
                 if (created != null)
                 {
@@ -372,7 +377,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 {
                     await CreateInvoicePaidLogAsync(log, paid, cancellationToken);
                     return;
-                }               
+                }
 
             }
             catch (Exception ex)
@@ -381,10 +386,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-        private async Task CreateInvoiceCreatedLog(
-        FilterLog log,
-        EventLog<InvoiceCreatedEventDTO> eLog,
-        CancellationToken cancellationToken)
+        private async Task CreateInvoiceCreatedLog(FilterLog log, EventLog<InvoiceCreatedEventDTO> eLog, CancellationToken cancellationToken)
         {
             try
             {
@@ -425,8 +427,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 lock (_blockLock)
                 {
-                    _lastProcessedBlock = BigInteger.Max(
-                        _lastProcessedBlock,
+                    _invoiceLastProcessedBlock = BigInteger.Max(
+                        _invoiceLastProcessedBlock,
                         log.BlockNumber.Value + 1
                     );
                 }
@@ -442,11 +444,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-
-        private async Task CreateInvoicePaidLogAsync(
-        FilterLog log,
-        EventLog<InvoicePaidEventDTO> eLog,
-        CancellationToken cancellationToken)
+        private async Task CreateInvoicePaidLogAsync(FilterLog log, EventLog<InvoicePaidEventDTO> eLog, CancellationToken cancellationToken)
         {
             try
             {
@@ -484,7 +482,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 _lastEventReceived = DateTime.UtcNow;
 
 
-              
+
             }
             catch (Exception ex)
             {
@@ -509,6 +507,377 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 .FromUnixTimeSeconds((long)unixSeconds.Value)
                 .UtcDateTime;
         }
+        #endregion
+
+
+
+        #region Stake
+
+        private async Task SubscribeToStakeContractEventsAsync(CancellationToken cancellationToken)
+        {
+            var subscription = new EthLogsObservableSubscription(_webSocketClient);
+
+            var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
+                .Where(log => log.Address.IsTheSameAddress(blockChainSettings.BEP20StakeContractAddress))
+                .Select(log => Observable.FromAsync(() => ProcessStakeContractEventLogAsync(log, cancellationToken)))
+                .Concat();
+
+            _stakeContractEventsSubscription = safeObservable.Subscribe(
+                _ => { },
+                ex =>
+                {
+                    _logger.LogError(ex, "Error in STAKE subscription.");
+                },
+                () =>
+                {
+                    _logger.LogWarning("STAKE subscription completed unexpectedly.");
+                });
+
+            var filter = new NewFilterInput
+            {
+                Address = new[] { blockChainSettings.BEP20StakeContractAddress },
+                FromBlock = new BlockParameter(await GetStakeLastProcessedBlock(cancellationToken))
+            };
+
+            await subscription.SubscribeAsync(filter);
+
+            _logger.LogInformation(
+                "BEP20 Stake Contract subscription is active. Address: {Address}",
+                blockChainSettings.BEP20StakeContractAddress
+            );
+        }
+
+        private async Task ProcessStakeContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositCreated = log.DecodeEvent<DepositCreatedEventDTO>();
+                if (depositCreated != null)
+                {
+                    await CreateDepositCreatedLogAsync(log, depositCreated, cancellationToken);
+                    return;
+                }
+
+                var earlyWithdrawn = log.DecodeEvent<EarlyWithdrawnEventDTO>();
+                if (earlyWithdrawn != null)
+                {
+                    await CreateEarlyWithdrawnLogAsync(log, earlyWithdrawn, cancellationToken);
+                    return;
+                }
+
+                var profitWithdrawn = log.DecodeEvent<ProfitWithdrawnEventDTO>();
+                if (profitWithdrawn != null)
+                {
+                    await CreateProfitWithdrawnLogAsync(log, profitWithdrawn, cancellationToken);
+                    return;
+                }
+
+                var withdrawn = log.DecodeEvent<WithdrawnEventDTO>();
+                if (withdrawn != null)
+                {
+                    await CreateWithdrawnLogAsync(log, withdrawn, cancellationToken);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error decoding STAKE blockchain event");
+            }
+        }
+
+        private async Task CreateDepositCreatedLogAsync(FilterLog log, EventLog<DepositCreatedEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+
+                _logger.LogInformation(
+                    "BEP20 DepositCreated | DepositId: {DepositId}, Depositor: {Depositor}, Token: {Token}",
+                    depositId,
+                    eLog.Event.Depositor,
+                    eLog.Event.Token
+                );
+
+                await transactionLogService.CreateDepositCreatedLogAsync(
+                    new _TransactionLog.DTOs.DepositCreatedLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+                        Token = eLog.Event.Token,
+
+                        LockDuration = eLog.Event.LockDuration,
+                        Principal = eLog.Event.Principal,
+                        Profit = eLog.Event.Profit,
+                        UnlocksAt = eLog.Event.UnlocksAt,
+
+                        EventType = Domain.Collections.BlockchainEventType.DepositCreated,
+                        Network = "BEP20"
+                    }
+                );
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                lock (_blockLock)
+                {
+                    _invoiceLastProcessedBlock = BigInteger.Max(
+                        _invoiceLastProcessedBlock,
+                        log.BlockNumber.Value + 1
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error processing DepositCreated event. TxHash: {TxHash}",
+                    log.TransactionHash
+                );
+
+                throw;
+            }
+        }
+
+        private async Task CreateEarlyWithdrawnLogAsync(FilterLog log, EventLog<EarlyWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+
+                _logger.LogInformation(
+                    "BEP20 EarlyWithdrawn | DepositId: {DepositId}, Depositor: {Depositor}",
+                    depositId,
+                    eLog.Event.Depositor
+                );
+
+                SentrySdk.CaptureMessage(
+                    $"BEP20 EarlyWithdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
+                );
+
+                await transactionLogService.CreateEarlyWithdrawnLogAsync(
+                    new _TransactionLog.DTOs.EarlyWithdrawnLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+
+                        WithdrawAmount = eLog.Event.WithdrawAmount,
+                        ProfitAmount = eLog.Event.ProfitAmount,
+                        FinalPayoutAmount = eLog.Event.FinalPayoutAmount,
+                        ClaimedProfitAmount = eLog.Event.ClaimedProfitAmount,
+
+                        EventType = Domain.Collections.BlockchainEventType.EarlyWithdrawn,
+                        Network = "BEP20"
+                    }
+                );
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                //lock (_blockLock)
+                //{
+                //    _lastProcessedBlock = BigInteger.Max(
+                //        _lastProcessedBlock,
+                //        log.BlockNumber.Value + 1
+                //    );
+                //}
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error processing EarlyWithdrawn event. TxHash: {TxHash}",
+                    log.TransactionHash
+                );
+
+                throw;
+            }
+        }
+
+        private async Task CreateProfitWithdrawnLogAsync(FilterLog log, EventLog<ProfitWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+
+                _logger.LogInformation(
+                    "BEP20 ProfitWithdrawn | DepositId: {DepositId}, Depositor: {Depositor}, Profit: {Profit}",
+                    depositId,
+                    eLog.Event.Depositor,
+                    eLog.Event.Profit
+                );
+
+                SentrySdk.CaptureMessage(
+                    $"BEP20 ProfitWithdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}, Profit: {eLog.Event.Profit}"
+                );
+
+                await transactionLogService.CreateProfitWithdrawnLogAsync(
+                    new _TransactionLog.DTOs.ProfitWithdrawnLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+                        Token = eLog.Event.Token,
+
+                        Profit = eLog.Event.Profit,
+
+                        EventType = Domain.Collections.BlockchainEventType.ProfitWithdrawn,
+                        Network = "BEP20"
+                    }
+                );
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                //lock (_blockLock)
+                //{
+                //    _lastProcessedBlock = BigInteger.Max(
+                //        _lastProcessedBlock,
+                //        log.BlockNumber.Value + 1
+                //    );
+                //}
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error processing ProfitWithdrawn event. TxHash: {TxHash}",
+                    log.TransactionHash
+                );
+
+                throw;
+            }
+        }
+
+        private async Task CreateWithdrawnLogAsync(FilterLog log, EventLog<WithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+
+                _logger.LogInformation(
+                    "BEP20 Withdrawn | DepositId: {DepositId}, Depositor: {Depositor}",
+                    depositId,
+                    eLog.Event.Depositor
+                );
+
+                SentrySdk.CaptureMessage(
+                    $"BEP20 Withdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
+                );
+
+                await transactionLogService.CreateWithdrawnLogAsync(
+                    new _TransactionLog.DTOs.WithdrawnLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+
+                        Principal = eLog.Event.Principal,
+                        Profit = eLog.Event.Profit,
+                        TotalPayout = eLog.Event.TotalPayout,
+
+                        EventType = Domain.Collections.BlockchainEventType.WithdrawnAll,
+                        Network = "BEP20"
+                    }
+                );
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                //lock (_blockLock)
+                //{
+                //    _lastProcessedBlock = BigInteger.Max(
+                //        _lastProcessedBlock,
+                //        log.BlockNumber.Value + 1
+                //    );
+                //}
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error processing Withdrawn event. TxHash: {TxHash}",
+                    log.TransactionHash
+                );
+
+                throw;
+            }
+        }
+
+        private async Task<HexBigInteger> GetStakeLastProcessedBlock(CancellationToken cancellationToken)
+        {
+            try
+            {
+                lock (_blockLock)
+                {
+                    if (_stakeLastProcessedBlock > 0)
+                        return _stakeLastProcessedBlock.ToHexBigInteger();
+                }
+
+                var lastDbBlock =
+                    await transactionLogService.GetDepositLastCheckedBlockNumberAsync("BEP20");
+
+                lock (_blockLock)
+                {
+                    _stakeLastProcessedBlock = lastDbBlock;
+                }
+
+                if (_stakeLastProcessedBlock > 0)
+                    return _stakeLastProcessedBlock.ToHexBigInteger();
+
+                try
+                {
+                    var web3Client = new Web3(blockChainSettings.RpcUrl);
+
+                    try
+                    {
+                        var latestBlockNumber =
+                            await web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                        lock (_blockLock)
+                        {
+                            _stakeLastProcessedBlock = latestBlockNumber;
+                            return latestBlockNumber;
+                        }
+                    }
+                    catch
+                    {
+                        web3Client = new Web3(blockChainSettings.RpcUrl);
+
+                        var latestBlockNumber =
+                            await web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                        lock (_blockLock)
+                        {
+                            _stakeLastProcessedBlock = latestBlockNumber;
+                            return latestBlockNumber;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e.Message);
+                    throw;
+                }
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                throw;
+            }
+        }
+
+        #endregion
+
 
 
         private static string ByteArray32ToHex(byte[] bytes)
@@ -519,7 +888,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             if (bytes.Length != 32)
                 throw new ArgumentException("Input must be exactly 32 bytes for bytes32");
 
-            return  bytes.ToHex();
+            return bytes.ToHex();
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
@@ -543,9 +912,13 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             if (!_isDisposed)
             {
                 _contractEventsSubscription?.Dispose();
+                _stakeContractEventsSubscription?.Dispose();
+
                 _webSocketClient?.Dispose();
+
                 _reconnectLock?.Dispose();
                 _cleanupLock?.Dispose();
+
                 _isDisposed = true;
             }
         }

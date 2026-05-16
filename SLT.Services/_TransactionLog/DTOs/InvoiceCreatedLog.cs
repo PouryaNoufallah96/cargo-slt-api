@@ -19,7 +19,6 @@ namespace SLT.Services._TransactionLog.DTOs
         public string Network { get; set; }
     }
 
-
     public class InvoicePaidLog
     {
         public string InvoiceId { get; set; }
@@ -34,6 +33,8 @@ namespace SLT.Services._TransactionLog.DTOs
         public BlockchainEventType EventType { get; set; }
         public string Network { get; set; }
 
-
     }
+
+
+
 }

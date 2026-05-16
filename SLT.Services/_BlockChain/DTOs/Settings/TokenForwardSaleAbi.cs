@@ -226,6 +226,443 @@
 ]
     ";
 
+        public const string SwapAbi = @"
+[
+    {
+        ""type"": ""function"",
+        ""name"": ""deposit"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""amount"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""lockDuration"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""getDeposit"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": """",
+                ""type"": ""tuple"",
+                ""internalType"": ""struct StakingTypes.Deposit"",
+                ""components"": [
+                    {
+                        ""name"": ""depositId"",
+                        ""type"": ""bytes32"",
+                        ""internalType"": ""bytes32""
+                    },
+                    {
+                        ""name"": ""depositor"",
+                        ""type"": ""address"",
+                        ""internalType"": ""address""
+                    },
+                    {
+                        ""name"": ""token"",
+                        ""type"": ""address"",
+                        ""internalType"": ""address""
+                    },
+                    {
+                        ""name"": ""principal"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""profit"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""profitRateBps"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""lockDuration"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""depositedAt"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""unlocksAt"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""status"",
+                        ""type"": ""uint8"",
+                        ""internalType"": ""enum StakingTypes.DepositStatus""
+                    },
+                    {
+                        ""name"": ""profitWithdrawn"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    }
+                ]
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""getPlan"",
+        ""inputs"": [
+            {
+                ""name"": ""planId"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": """",
+                ""type"": ""tuple"",
+                ""internalType"": ""struct StakingTypes.Plan"",
+                ""components"": [
+                    {
+                        ""name"": ""minDuration"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""maxDuration"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""profitRateBps"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""active"",
+                        ""type"": ""bool"",
+                        ""internalType"": ""bool""
+                    }
+                ]
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""previewAccruedProfit"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": ""claimable"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""previewEarlyWithdraw"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""amount"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": ""payout"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""earlyProfit"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""earlyRateBps"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""previewPayout"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": ""totalPayout"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""withdrawAll"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""withdrawEarly"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""amount"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""withdrawProfit"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""DepositCreated"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""depositor"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""principal"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""profit"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""lockDuration"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""unlocksAt"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""EarlyWithdrawn"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""depositor"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""principalPaid"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""profitPaid"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""totalPayout"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""remainingPrincipal"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""ProfitWithdrawn"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""depositor"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""profit"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""Withdrawn"",
+        ""inputs"": [
+            {
+                ""name"": ""depositId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""depositor"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""principal"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""profit"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""totalPayout"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
+    }
+]";
+
         public const string ERC20Abi = @"[
             { 'constant':true,'inputs':[{'name':'_owner','type':'address'}],'name':'balanceOf','outputs':[{'name':'balance','type':'uint256'}],'type':'function' },
             { 'constant':true,'inputs':[],'name':'decimals','outputs':[{'name':'','type':'uint8'}],'type':'function' },
