@@ -10,6 +10,7 @@ namespace SLT.Services._Stake.DTOs.Results
         public string TokenSymbol { get; set; }
         public string TokenName { get; set; }
         public decimal TokenAmount { get; set; }
+        public decimal StartAmount { get; set; } 
         public decimal TokenPrice { get; set; } 
         public decimal EachMonthProfit { get; set; }
         public int MonthDuration { get; set; }

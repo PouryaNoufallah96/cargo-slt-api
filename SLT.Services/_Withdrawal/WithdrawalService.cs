@@ -57,6 +57,8 @@ namespace SLT.Services._Withdrawal
 
                 stake.TotalProfitOfAmountWithdrawn = await stakeWithdrawals
                     .SumAsync(w => (decimal?)w.ProfitAmount) ?? 0m;
+
+                stake.TokenAmount = Math.Max(0, (stake.TokenAmount - stake.TotalAmountWithdrawn));
             }
 
             var totalOut = stake.TotalAmountWithdrawn;

@@ -31,6 +31,6 @@ namespace SLT.Domain.Collections
 
 
     }
-    public enum StakeState { NotRegistered, Active, Withdraw, Finished, Canceled }
+    public enum StakeState { NotRegistered, Active, Finished, Canceled }
 
 }

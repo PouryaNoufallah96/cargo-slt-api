@@ -208,6 +208,7 @@ namespace SLT.Services._Stake
             return list;
         }
 
+
         /// <summary>
         /// use for get stake detail
         /// </summary>
@@ -279,6 +280,7 @@ namespace SLT.Services._Stake
             return result;
         }
 
+
         /// <summary>
         /// use for activate stake
         /// </summary>
@@ -342,8 +344,6 @@ namespace SLT.Services._Stake
         }
 
 
-
-
         /// <summary>
         /// use for getting passed full months
         /// </summary>
@@ -375,6 +375,7 @@ namespace SLT.Services._Stake
                 WalletAddress = stake.WalletAddress,
                 TokenSymbol = stake.TokenSymbol,
                 TokenName = stake.TokenName,
+                StartAmount = stake.StartAmount,
                 TokenAmount = stake.TokenAmount,
                 TokenPrice = stake.TokenPrice,
                 MonthDuration = stake.MonthDuration,
@@ -402,6 +403,7 @@ namespace SLT.Services._Stake
                 WalletAddress = stake.WalletAddress,
                 TokenSymbol = stake.TokenSymbol,
                 TokenName = stake.TokenName,
+                StartAmount = stake.StartAmount,
                 TokenAmount = stake.TokenAmount,
                 TokenPrice = stake.TokenPrice,
                 MonthDuration = stake.MonthDuration,
@@ -409,6 +411,8 @@ namespace SLT.Services._Stake
                 EndMoment = stake.EndMoment,
                 TotalProfitWithdrawn = stake.TotalProfitWithdrawn,
                 TotalAmountWithdrawn = stake.TotalAmountWithdrawn,
+                TotalCostOfAmountWithdrawn = stake.TotalCostOfAmountWithdrawn,
+                TotalProfitOfAmountWithdrawn = stake.TotalProfitOfAmountWithdrawn,
                 State = stake.State,
                 EachMonthProfit = stake.EachMonthProfit,
                 EachMonthProfitPercent = stake.EachMonthProfitPercent,
