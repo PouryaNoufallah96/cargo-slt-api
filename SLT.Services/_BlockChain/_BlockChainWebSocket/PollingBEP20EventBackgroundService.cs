@@ -14,20 +14,20 @@ using static Utilities.Constants.RegisterMode;
 
 namespace SLT.Services._BlockChain._BlockChainWebSocket
 {
-    public class PollingERC20EventBackgroundService : BackgroundService, IHostedDependency
+    public class PollingBEP20EventBackgroundService : BackgroundService, IHostedDependency
     {
         #region Prefixes
 
-        private const string InvoiceLogPrefix = "[ERC20-INVOICE-POLLING]";
-        private const string StakeLogPrefix = "[ERC20-STAKE-POLLING]";
-        private const string CommonPrefix = "[ERC20-POLLING]";
-        private const string NetworkName = "ERC20";
+        private const string InvoiceLogPrefix = "[BEP20-INVOICE-POLLING]";
+        private const string StakeLogPrefix = "[BEP20-STAKE-POLLING]";
+        private const string CommonPrefix = "[BEP20-POLLING]";
+        private const string NetworkName = "BEP20";
         #endregion
 
         #region Services
 
         private readonly ITransactionLogService _transactionLogService;
-        private readonly ILogger<PollingERC20EventBackgroundService> _logger;
+        private readonly ILogger<PollingBEP20EventBackgroundService> _logger;
         private readonly BlockChainSettings _settings;
 
         #endregion
@@ -50,18 +50,18 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         #endregion
 
-        public PollingERC20EventBackgroundService(
+        public PollingBEP20EventBackgroundService(
             ITransactionLogService transactionLogService,
-            ILogger<PollingERC20EventBackgroundService> logger,
+            ILogger<PollingBEP20EventBackgroundService> logger,
             BlockChainSettings settings)
         {
             _transactionLogService = transactionLogService;
             _logger = logger;
             _settings = settings;
 
-            _web3 = new Web3(_settings.ERC20RpcUrl);
-            _invoiceContractAddress = _settings.ERC20ContractAddress;
-            _stakeContractAddress = _settings.ERC20StakeContractAddress;
+            _web3 = new Web3(_settings.RpcUrl);
+            _invoiceContractAddress = _settings.ContractAddress;
+            _stakeContractAddress = _settings.BEP20StakeContractAddress;
         }
 
 
@@ -331,37 +331,12 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 try
                 {
-                    var _web3Client = new Web3(_settings.RpcUrl2);
-                    try
+                    var latestBlockNumber = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                    lock (_blockLock)
                     {
-
-                        var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                        lock (_blockLock)
-                        {
-                            _lastinvoiceProcessedBlock = latestBlockNumber;
-                            return latestBlockNumber;
-                        }
-
-                    }
-                    catch (Exception)
-                    {
-                        try
-                        {
-                            _web3Client = new Web3(_settings.RpcUrl);
-                            var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                            lock (_blockLock)
-                            {
-                                _lastinvoiceProcessedBlock = latestBlockNumber;
-                                return latestBlockNumber;
-                            }
-                        }
-                        catch (Exception)
-                        {
-
-                            throw;
-                        }
-
-
+                        _lastinvoiceProcessedBlock = latestBlockNumber;
+                        return latestBlockNumber;
                     }
 
 
@@ -392,7 +367,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 .FromUnixTimeSeconds((long)unixSeconds.Value)
                 .UtcDateTime;
         }
-        
         #endregion
 
 
