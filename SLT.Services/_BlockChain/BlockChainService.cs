@@ -21,6 +21,7 @@ namespace SLT.Services._BlockChain
     {
         private const string ContractAbi = TokenForwardSaleAbi.Value;
         private const string ERC20Abi = TokenForwardSaleAbi.ERC20Abi;
+        private const string StakeAbi = TokenForwardSaleAbi.StakeAbi;
         private readonly BlockChainSettings _settings;
         private readonly ILogger<BlockChainService> _logger;
         private readonly IMultiCallService _multicallService;
@@ -516,7 +517,7 @@ namespace SLT.Services._BlockChain
                         throw new BadRequestException("Invalid network type.");
                 }
 
-                var contract = web3.Eth.GetContract(ContractAbi, contractAddress);
+                var contract = web3.Eth.GetContract(StakeAbi, contractAddress);
 
                 var function = contract.GetFunction("previewAccruedProfit");
 

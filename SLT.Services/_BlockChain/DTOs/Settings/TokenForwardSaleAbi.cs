@@ -226,7 +226,7 @@
 ]
     ";
 
-        public const string SwapAbi = @"
+        public const string StakeAbi = @"
 [
     {
         ""type"": ""function"",
