@@ -6,6 +6,9 @@
         public string Symbol { get; set; }
 
         public decimal TokenAmount { get; set; }
+        public decimal FinalProfitAmount { get; set; }   
+        public decimal TotalDeposit { get; set; }
         public int StakeCount { get; set; }
+
     }
 }

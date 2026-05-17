@@ -160,7 +160,8 @@ namespace SLT.Services._Stake
         /// <exception cref="NotImplementedException"></exception>
         public async Task<List<StakeWalletStatsResult>> GetWalletStatsAsync(GetStakeWalletStatsUpdate update, string evmWalletAddress)
         {
-            var query = _stakeRepository.AsQueryable().Where(q => q.State != StakeState.NotRegistered);
+            var query = _stakeRepository.AsQueryable()
+                .Where(q => q.State != StakeState.NotRegistered);
 
             query = query.Where(x =>
                 x.WalletAddress == evmWalletAddress);
@@ -175,7 +176,12 @@ namespace SLT.Services._Stake
                         Name = g.First().TokenName,
 
                         TokenAmount = g.Sum(x => x.TokenAmount),
-                        StakeCount = g.Count()
+                        StakeCount = g.Count(),
+                        TotalDeposit = g.Sum(x => x.StartAmount),
+
+                        FinalProfitAmount = g.Sum(x =>
+                            (x.TotalProfitOfAmountWithdrawn + x.TotalProfitWithdrawn)
+                            - x.TotalCostOfAmountWithdrawn)
                     })
                     .ToListAsync();
 
@@ -189,13 +195,18 @@ namespace SLT.Services._Stake
                     Name = x.TokenName,
 
                     TokenAmount = x.TokenAmount,
-                    StakeCount = 1
+                    StakeCount = 1,
+
+                    TotalDeposit = x.StartAmount,
+
+                    FinalProfitAmount =
+                        (x.TotalProfitOfAmountWithdrawn + x.TotalProfitWithdrawn)
+                        - x.TotalCostOfAmountWithdrawn
                 })
                 .ToListAsync();
 
             return list;
         }
-
 
         /// <summary>
         /// use for get stake detail
