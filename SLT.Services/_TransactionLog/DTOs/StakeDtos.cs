@@ -22,10 +22,10 @@ namespace SLT.Services._TransactionLog.DTOs
     public class DepositCreatedData
     {
         public string Depositor { get; set; }
-        public BigInteger Principal { get; set; }
-        public BigInteger Profit { get; set; }
-        public BigInteger LockDuration { get; set; }
-        public BigInteger UnlocksAt { get; set; }
+        public string Principal { get; set; }
+        public string Profit { get; set; }
+        public string LockDuration { get; set; }
+        public string UnlocksAt { get; set; }
     }
 
 
@@ -50,10 +50,10 @@ namespace SLT.Services._TransactionLog.DTOs
     {
         public string Depositor { get; set; }
 
-        public BigInteger WithdrawAmount { get; set; }
-        public BigInteger ProfitAmount { get; set; }
-        public BigInteger ClaimedProfitAmount { get; set; }
-        public BigInteger FinalPayoutAmount { get; set; }
+        public string WithdrawAmount { get; set; }
+        public string ProfitAmount { get; set; }
+        public string ClaimedProfitAmount { get; set; }
+        public string FinalPayoutAmount { get; set; }
     }
 
 
@@ -73,7 +73,7 @@ namespace SLT.Services._TransactionLog.DTOs
     }
     public class ProfitWithdrawnData
     {
-        public BigInteger Profit { get; set; }
+        public string Profit { get; set; }
         public string Depositor { get; set; }
 
     }
@@ -100,9 +100,9 @@ namespace SLT.Services._TransactionLog.DTOs
     {
         public string Depositor { get; set; }
 
-        public BigInteger Principal { get; set; }
-        public BigInteger Profit { get; set; }
-        public BigInteger TotalPayout { get; set; }
+        public string Principal { get; set; }
+        public string Profit { get; set; }
+        public string TotalPayout { get; set; }
     }
 
 

@@ -377,34 +377,34 @@ namespace SLT.Services._TransactionLog
             {
                 DepositCreatedLog x => new DepositCreatedData
                 {
-                    Depositor = x.Depositor,
-                    UnlocksAt = x.UnlocksAt,
-                    Profit = x.Profit,
-                    Principal = x.Principal,
-                    LockDuration = x.LockDuration
+                    Depositor = x.Depositor.ToString(),
+                    UnlocksAt = x.UnlocksAt.ToString(),
+                    Profit = x.Profit.ToString(),
+                    Principal = x.Principal.ToString(),
+                    LockDuration = x.LockDuration.ToString()
                 },
 
                 EarlyWithdrawnLog x => new EarlyWithdrawnData
                 {
                     Depositor = x.Depositor,
-                    ClaimedProfitAmount = x.ClaimedProfitAmount,
-                    FinalPayoutAmount = x.FinalPayoutAmount,
-                    ProfitAmount = x.ProfitAmount,
-                    WithdrawAmount = x.WithdrawAmount
+                    ClaimedProfitAmount = x.ClaimedProfitAmount.ToString(),
+                    FinalPayoutAmount = x.FinalPayoutAmount.ToString(),
+                    ProfitAmount = x.ProfitAmount.ToString(),
+                    WithdrawAmount = x.WithdrawAmount.ToString()
                 },
 
                 ProfitWithdrawnLog x => new ProfitWithdrawnData
                 {
                     Depositor = x.Depositor,
-                    Profit = x.Profit
+                    Profit = x.Profit.ToString()
                 },
 
                 WithdrawnLog x => new WithdrawnData
                 {
                     Depositor = x.Depositor,
-                    Principal = x.Principal,
-                    Profit = x.Profit,
-                    TotalPayout = x.TotalPayout
+                    Principal = x.Principal.ToString(),
+                    Profit = x.Profit.ToString(),
+                    TotalPayout = x.TotalPayout.ToString()
                 },
 
                 _ => throw new NotSupportedException($"No serializer defined for type {typeof(T).Name}")
