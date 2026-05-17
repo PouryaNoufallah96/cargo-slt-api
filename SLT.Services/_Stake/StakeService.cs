@@ -243,16 +243,19 @@ namespace SLT.Services._Stake
             var profitStartDate = lastStakeWithdrawal?.RegisterMoment ?? stake.StartMoment;
 
             var passedMonths = GetPassedTestMonths(profitStartDate, now);
-            decimal availableProfit = 0;
+            //decimal availableProfit = 0;
 
-            if (passedMonths > 0)
-            {
-                var monthlyProfit =
-                    stake.TokenAmount * (stake.EachMonthProfitPercent / 100m);
+            //if (passedMonths > 0)
+            //{
+            //    var monthlyProfit =
+            //        stake.TokenAmount * (stake.EachMonthProfitPercent / 100m);
 
-                availableProfit = monthlyProfit * passedMonths;
-            }
+            //    availableProfit = monthlyProfit * passedMonths;
+            //}
 
+            var availableProfitInWei = await _blockChainService.PreviewAccruedProfitAsync(stake.StakeReference, stake.TokenNetworkName);
+            var token = ValidateToken(stake.TokenSymbol);
+            var availableProfit = _blockChainService.ConvertFromWei(availableProfitInWei, token.PriceDecimalPlaces);
             result.AvailableProfitForWithdraw = availableProfit;
 
 

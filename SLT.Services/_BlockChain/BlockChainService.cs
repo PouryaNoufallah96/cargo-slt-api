@@ -480,7 +480,72 @@ namespace SLT.Services._BlockChain
 
 
 
+        /// <summary>
+        /// Preview accrued profit for a deposit
+        /// </summary>
+        /// <param name="depositId">Deposit Id (bytes32 hex string)</param>
+        /// <param name="network">Network type (BEP20 / ERC20)</param>
+        /// <returns>Claimable profit amount</returns>
+        /// <exception cref="BadRequestException"></exception>
+        public async Task<BigInteger> PreviewAccruedProfitAsync(string depositId, string network)
+        {
+            if (string.IsNullOrWhiteSpace(depositId))
+                throw new BadRequestException("Deposit ID is null or empty.");
 
+            if (string.IsNullOrWhiteSpace(network))
+                throw new BadRequestException("Network is null or empty.");
+
+            try
+            {
+                Web3 web3;
+                string contractAddress;
+
+                switch (network.ToUpper())
+                {
+                    case "BEP20":
+                        web3 = _bep20Web3;
+                        contractAddress = _settings.BEP20StakeContractAddress;
+                        break;
+
+                    case "ERC20":
+                        web3 = _erc20Web3;
+                        contractAddress = _settings.ERC20StakeContractAddress;
+                        break;
+
+                    default:
+                        throw new BadRequestException("Invalid network type.");
+                }
+
+                var contract = web3.Eth.GetContract(ContractAbi, contractAddress);
+
+                var function = contract.GetFunction("previewAccruedProfit");
+
+                var depositIdBytes = HexToByteArray32(depositId);
+
+                var result = await function.CallAsync<BigInteger>(
+                    depositIdBytes
+                );
+
+                return result;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert error during previewAccruedProfit: {Message}",
+                    revertEx.Message);
+
+                throw new BaseException("Blockchain contract reverted.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error during previewAccruedProfit.");
+
+                throw new BaseException("An error happened while previewing accrued profit.");
+            }
+        }
 
 
         ///// <summary>

@@ -15,9 +15,12 @@ namespace SLT.Services._BlockChain
 
 
         Task<string> DeleteMultipleInvoicesAsync(List<string> invoicesId);  
-        Task<string> DeleteERC20MultipleInvoicesAsync(List<string> invoicesId);  
+        Task<string> DeleteERC20MultipleInvoicesAsync(List<string> invoicesId);
         //Task<string> DeleteSingleInvoiceAsync(string invoiceId);   
-         
+
+        Task<BigInteger> PreviewAccruedProfitAsync(string depositId, string network);
+
+
 
        // Utility Methods
        decimal ConvertFromWei(BigInteger weiAmount, int decimals = 18);
