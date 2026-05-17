@@ -242,7 +242,7 @@ namespace SLT.Services._Stake
 
             var profitStartDate = lastStakeWithdrawal?.RegisterMoment ?? stake.StartMoment;
 
-            var passedMonths = GetPassedFullMonths(profitStartDate, now);
+            var passedMonths = GetPassedTestMonths(profitStartDate, now);
             decimal availableProfit = 0;
 
             if (passedMonths > 0)
@@ -358,6 +358,13 @@ namespace SLT.Services._Stake
                 months--;
 
             return Math.Max(0, months);
+        }
+
+        private int GetPassedTestMonths(DateTime start, DateTime now)
+        {
+            var passedMinutes = (now - start).TotalMinutes;
+
+            return Math.Max(0, (int)passedMinutes);
         }
 
 
