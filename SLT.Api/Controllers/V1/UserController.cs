@@ -8,6 +8,7 @@ using SLT.Services._User;
 using SLT.Services._User.DTOs.Storages;
 using SLT.Services._User.DTOs.Updates;
 using SLT.Services._User.DTOs.Results;
+using SLT.Services._BlockChain;
 
 namespace CoinHalls.Api.Controllers.V1
 {

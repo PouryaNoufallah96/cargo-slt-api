@@ -27,6 +27,7 @@ namespace SLT.Api.Utilities.Middlewares
             "https://gate.sltcargopay.com",
             "https://app.sltcargopay.com",
             "http://localhost:5173",
+            "http://localhost:5191",
             "",
             };
 

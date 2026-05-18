@@ -409,7 +409,7 @@ namespace SLT.Services._BlockChain
                 }
             };
 
-            var returnDataList = await _multicallService.ExecuteCallsAsync(calls);
+            var returnDataList = await _multicallService.ExecuteBscCallsAsync(calls);
 
             if (returnDataList == null || returnDataList.Count == 0 || returnDataList[0] == null)
                 return 0;
@@ -437,9 +437,12 @@ namespace SLT.Services._BlockChain
         public async Task<decimal> GetERC20WalletAddressSingleTokenBalanceAsync(string walletAddress, string tokenName)
         {
 
+
             var token = ValidateToken(tokenName, "ERC20");
             if (token == null)
                 throw new BadRequestException($"Token '{tokenName}' not found in available tokens.");
+
+            var code = await _erc20Web3.Eth.GetCode.SendRequestAsync(token.Address);
 
             var erc20Contract = _erc20Web3.Eth.GetContract(ERC20Abi, token.Address);
             var balanceOfFunction = erc20Contract.GetFunction("balanceOf");
@@ -454,7 +457,7 @@ namespace SLT.Services._BlockChain
                 }
             };
 
-            var returnDataList = await _multicallService.ExecuteCallsAsync(calls);
+            var returnDataList = await _multicallService.ExecuteEthereumCallsAsync(calls);
 
             if (returnDataList == null || returnDataList.Count == 0 || returnDataList[0] == null)
                 return 0;
