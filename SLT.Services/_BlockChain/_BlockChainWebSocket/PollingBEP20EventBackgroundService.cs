@@ -67,24 +67,41 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            BigInteger latestBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-
-            //_logger.LogInformation(
-            //    "{Prefix} Checking latest block: {Block}",
-            //    InvoiceLogPrefix,
-            //    latestBlock);
-
-            var safeBlock = latestBlock - 10;
-
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await PollInvoiceMissingLogsAsync(safeBlock, stoppingToken);
+                    var latestBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
-                    await PollMissingStakeLogsAsync(safeBlock, stoppingToken);
+                    var safeBlock = BigInteger.Max(latestBlock.Value - 10, BigInteger.Zero);
 
-                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                    try
+                    {
+                        await PollInvoiceMissingLogsAsync(safeBlock, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "{Prefix} Invoice polling failed",
+                            InvoiceLogPrefix);
+                    }
+
+                    try
+                    {
+                        await PollMissingStakeLogsAsync(safeBlock, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "{Prefix} Stake polling failed",
+                            StakeLogPrefix);
+                    }
+
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(15),
+                        stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -98,18 +115,26 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 {
                     _logger.LogError(
                         ex,
-                        "{Prefix} Unexpected error in blockchain polling service",
+                        "{Prefix} Fatal polling loop error. Restarting...",
                         CommonPrefix);
 
-                    await Task.Delay(5000, stoppingToken);
+                    try
+                    {
+                        await Task.Delay(
+                            TimeSpan.FromSeconds(5),
+                            stoppingToken);
+                    }
+                    catch
+                    {
+                        break;
+                    }
                 }
             }
 
             _logger.LogInformation(
-                "{Prefix} Blockchain Event Service stopped.",
+                "{Prefix} Blockchain polling service stopped",
                 CommonPrefix);
         }
-
 
         #region Invoice
         private async Task PollInvoiceMissingLogsAsync(BigInteger latestBlock, CancellationToken cancellationToken)
