@@ -84,7 +84,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                     await PollMissingStakeLogsAsync(safeBlock, stoppingToken);
 
-                    await Task.Delay(TimeSpan.FromMinutes(3), stoppingToken);
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
