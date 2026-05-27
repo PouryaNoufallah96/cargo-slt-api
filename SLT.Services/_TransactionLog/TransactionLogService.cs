@@ -222,46 +222,46 @@ namespace SLT.Services._TransactionLog
             }
         }
 
-        public async Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input)
-        {
-            try
-            {
-                var existsLog = await _transactionLogRepository.AsQueryable()
-                    .Where(q =>
-                        q.Hash.ToLower() == input.Hash.ToLower() &&
-                        q.InvoiceId.ToLower() == input.DepositId.ToLower() &&
-                        q.EventType == BlockchainEventType.EarlyWithdrawn)
-                    .FirstOrDefaultAsync();
+        //public async Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input)
+        //{
+        //    try
+        //    {
+        //        var existsLog = await _transactionLogRepository.AsQueryable()
+        //            .Where(q =>
+        //                q.Hash.ToLower() == input.Hash.ToLower() &&
+        //                q.InvoiceId.ToLower() == input.DepositId.ToLower() &&
+        //                q.EventType == BlockchainEventType.EarlyWithdrawn)
+        //            .FirstOrDefaultAsync();
 
-                if (existsLog != null)
-                {
-                    _logger.LogWarning(
-                        "Duplicate EarlyWithdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
-                        input.DepositId, input.Hash);
-                    return;
-                }
+        //        if (existsLog != null)
+        //        {
+        //            _logger.LogWarning(
+        //                "Duplicate EarlyWithdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+        //                input.DepositId, input.Hash);
+        //            return;
+        //        }
 
-                var newLog = new TransactionLog
-                {
-                    Hash = input.Hash,
-                    Wallet = input.Depositor,
-                    BlockNumber = (decimal)input.BlockNumber,
-                    EventType = BlockchainEventType.EarlyWithdrawn,
-                    Status = TransactionStatus.Confirmed,
-                    Network = input.Network,
+        //        var newLog = new TransactionLog
+        //        {
+        //            Hash = input.Hash,
+        //            Wallet = input.Depositor,
+        //            BlockNumber = (decimal)input.BlockNumber,
+        //            EventType = BlockchainEventType.EarlyWithdrawn,
+        //            Status = TransactionStatus.Confirmed,
+        //            Network = input.Network,
 
-                    InvoiceId = input.DepositId,
-                    Data = SerializeData(input)
-                };
+        //            InvoiceId = input.DepositId,
+        //            Data = SerializeData(input)
+        //        };
 
-                await _transactionLogRepository.InsertOneAsync(newLog);
-                await _withdrawalService.CreateEarlyWithdrawnByEventAsync(input.DepositId, input.Hash, input.WithdrawAmount, input.ProfitAmount, input.ClaimedProfitAmount);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while creating EarlyWithdrawn transaction log.");
-            }
-        }
+        //        await _transactionLogRepository.InsertOneAsync(newLog);
+        //        await _withdrawalService.CreateEarlyWithdrawnByEventAsync(input.DepositId, input.Hash, input.WithdrawAmount, input.ProfitAmount, input.ClaimedProfitAmount);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error while creating EarlyWithdrawn transaction log.");
+        //    }
+        //}
 
         public async Task CreateProfitWithdrawnLogAsync(ProfitWithdrawnLog input)
         {

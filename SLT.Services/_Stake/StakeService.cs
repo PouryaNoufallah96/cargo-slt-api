@@ -59,7 +59,7 @@ namespace SLT.Services._Stake
 
             var plan = _stakeSetting.Plans
                 .FirstOrDefault(p => p.DurationInMonths == update.Duration)
-                ?? throw new BadRequestException("Invalid staking duration. Allowed durations are based on configured plans 12 and 24 month");
+                ?? throw new BadRequestException("Invalid staking duration. Allowed durations are based on configured plans 1 ,3 ,6 ,12 ,18 and 24 month");
 
             var tokenBalance = 0m;
 
@@ -242,17 +242,6 @@ namespace SLT.Services._Stake
 
             var profitStartDate = lastStakeWithdrawal?.RegisterMoment ?? stake.StartMoment;
 
-            var passedMonths = GetPassedTestMonths(profitStartDate, now);
-            //decimal availableProfit = 0;
-
-            //if (passedMonths > 0)
-            //{
-            //    var monthlyProfit =
-            //        stake.TokenAmount * (stake.EachMonthProfitPercent / 100m);
-
-            //    availableProfit = monthlyProfit * passedMonths;
-            //}
-
             var availableProfitInWei = await _blockChainService.PreviewAccruedProfitAsync(stake.StakeReference, stake.TokenNetworkName);
             var token = ValidateToken(stake.TokenSymbol);
             var availableProfit = _blockChainService.ConvertFromWei(availableProfitInWei, token.PriceDecimalPlaces);
@@ -347,28 +336,28 @@ namespace SLT.Services._Stake
         }
 
 
-        /// <summary>
-        /// use for getting passed full months
-        /// </summary>
-        /// <param name="start"></param>
-        /// <param name="now"></param>
-        /// <returns></returns>
-        private int GetPassedFullMonths(DateTime start, DateTime now)
-        {
-            int months = (now.Year - start.Year) * 12 + (now.Month - start.Month);
+        ///// <summary>
+        ///// use for getting passed full months
+        ///// </summary>
+        ///// <param name="start"></param>
+        ///// <param name="now"></param>
+        ///// <returns></returns>
+        //private int GetPassedFullMonths(DateTime start, DateTime now)
+        //{
+        //    int months = (now.Year - start.Year) * 12 + (now.Month - start.Month);
 
-            if (now.Day < start.Day)
-                months--;
+        //    if (now.Day < start.Day)
+        //        months--;
 
-            return Math.Max(0, months);
-        }
+        //    return Math.Max(0, months);
+        //}
 
-        private int GetPassedTestMonths(DateTime start, DateTime now)
-        {
-            var passedMinutes = (now - start).TotalMinutes;
+        //private int GetPassedTestMonths(DateTime start, DateTime now)
+        //{
+        //    var passedMinutes = (now - start).TotalMinutes;
 
-            return Math.Max(0, (int)passedMinutes);
-        }
+        //    return Math.Max(0, (int)passedMinutes);
+        //}
 
 
         /// <summary>
@@ -403,7 +392,7 @@ namespace SLT.Services._Stake
             };
 
         }
-        
+
         private StakeDetailResult ConvertToDetailResult(Stake stake)
         {
 
@@ -459,6 +448,6 @@ namespace SLT.Services._Stake
             return newId;
         }
 
-        
+
     }
 }

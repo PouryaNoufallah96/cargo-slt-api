@@ -349,12 +349,7 @@
                 ""internalType"": ""struct StakingTypes.Plan"",
                 ""components"": [
                     {
-                        ""name"": ""minDuration"",
-                        ""type"": ""uint256"",
-                        ""internalType"": ""uint256""
-                    },
-                    {
-                        ""name"": ""maxDuration"",
+                        ""name"": ""duration"",
                         ""type"": ""uint256"",
                         ""internalType"": ""uint256""
                     },
@@ -394,40 +389,6 @@
     },
     {
         ""type"": ""function"",
-        ""name"": ""previewEarlyWithdraw"",
-        ""inputs"": [
-            {
-                ""name"": ""depositId"",
-                ""type"": ""bytes32"",
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""amount"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""outputs"": [
-            {
-                ""name"": ""payout"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""earlyProfit"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""earlyRateBps"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""function"",
         ""name"": ""previewPayout"",
         ""inputs"": [
             {
@@ -444,37 +405,6 @@
             }
         ],
         ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""withdrawAll"",
-        ""inputs"": [
-            {
-                ""name"": ""depositId"",
-                ""type"": ""bytes32"",
-                ""internalType"": ""bytes32""
-            }
-        ],
-        ""outputs"": [],
-        ""stateMutability"": ""nonpayable""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""withdrawEarly"",
-        ""inputs"": [
-            {
-                ""name"": ""depositId"",
-                ""type"": ""bytes32"",
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""amount"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""outputs"": [],
-        ""stateMutability"": ""nonpayable""
     },
     {
         ""type"": ""function"",
@@ -540,7 +470,7 @@
     },
     {
         ""type"": ""event"",
-        ""name"": ""EarlyWithdrawn"",
+        ""name"": ""Withdrawn"",
         ""inputs"": [
             {
                 ""name"": ""depositId"",
@@ -555,31 +485,19 @@
                 ""internalType"": ""address""
             },
             {
-                ""name"": ""token"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""principalPaid"",
+                ""name"": ""principal"",
                 ""type"": ""uint256"",
                 ""indexed"": false,
                 ""internalType"": ""uint256""
             },
             {
-                ""name"": ""profitPaid"",
+                ""name"": ""profit"",
                 ""type"": ""uint256"",
                 ""indexed"": false,
                 ""internalType"": ""uint256""
             },
             {
                 ""name"": ""totalPayout"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""remainingPrincipal"",
                 ""type"": ""uint256"",
                 ""indexed"": false,
                 ""internalType"": ""uint256""
@@ -611,49 +529,6 @@
             },
             {
                 ""name"": ""profit"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""Withdrawn"",
-        ""inputs"": [
-            {
-                ""name"": ""depositId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""depositor"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""token"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""principal"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""profit"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""totalPayout"",
                 ""type"": ""uint256"",
                 ""indexed"": false,
                 ""internalType"": ""uint256""

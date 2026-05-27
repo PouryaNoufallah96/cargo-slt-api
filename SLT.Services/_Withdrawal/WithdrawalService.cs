@@ -117,61 +117,6 @@ namespace SLT.Services._Withdrawal
 
         }
 
-        public async Task CreateEarlyWithdrawnByEventAsync(string depositRef, string hash,
-            BigInteger withdrawAmount, BigInteger profitAmount, BigInteger costAmont)
-        {
-            var stake = await _stakeRepository.AsQueryable()
-          .FirstOrDefaultAsync(q => q.StakeReference == depositRef);
-
-            if (stake == null)
-                return;
-            var now = DateTime.UtcNow;
-            var tokenData = ValidateToken(stake.TokenName);
-
-            var withdraw = _blockChainService.ConvertFromWei(
-                withdrawAmount,
-                tokenData.PriceDecimalPlaces);
-
-            var profit = _blockChainService.ConvertFromWei(
-                profitAmount,
-                tokenData.PriceDecimalPlaces);
-
-            var cost = _blockChainService.ConvertFromWei(
-                costAmont,
-                tokenData.PriceDecimalPlaces);
-
-            var finalAmount = (withdraw + profit) - cost;
-
-            var withdrawal = new Withdrawal
-            {
-                WithdrawalRerefence = Guid.NewGuid().ToString("N"),
-                StakeReference = stake.StakeReference,
-                WalletAddress = stake.WalletAddress,
-                Symbol = stake.TokenSymbol,
-                Network = stake.TokenNetworkName,
-                Amount = withdraw,
-                Cost = cost,
-                ProfitAmount = profit,
-                FinalAmount = finalAmount,
-                Type = WithdrawalType.StakeWithdrawal,
-                State = WithdrawalState.Success,
-                RegisterMoment = now,
-                Hash = hash,
-            };
-
-            await _withdrawalRepository.InsertOneAsync(withdrawal);
-            await SyncStakeWithdrawalsAsync(stake.StakeReference, false, true);
-
-            var shortHash = hash[..10];
-
-            await _hubContext.Clients
-            .Group(stake.WalletAddress)
-            .SendAsync(
-                "PaymentMessage",
-                $"Your staking withdrawal was processed successfully. You received {finalAmount:N4} {stake.TokenSymbol}."
-            );
-        }
-
         public async Task CreateWithdrawnAllByEventAsync(string depositRef, string hash, BigInteger withdrawAmount, BigInteger profitAmount)
         {
             var stake = await _stakeRepository.AsQueryable()
@@ -241,6 +186,61 @@ namespace SLT.Services._Withdrawal
 }
 
 
+
+//public async Task CreateEarlyWithdrawnByEventAsync(string depositRef, string hash,
+//    BigInteger withdrawAmount, BigInteger profitAmount, BigInteger costAmont)
+//{
+//    var stake = await _stakeRepository.AsQueryable()
+//  .FirstOrDefaultAsync(q => q.StakeReference == depositRef);
+
+//    if (stake == null)
+//        return;
+//    var now = DateTime.UtcNow;
+//    var tokenData = ValidateToken(stake.TokenName);
+
+//    var withdraw = _blockChainService.ConvertFromWei(
+//        withdrawAmount,
+//        tokenData.PriceDecimalPlaces);
+
+//    var profit = _blockChainService.ConvertFromWei(
+//        profitAmount,
+//        tokenData.PriceDecimalPlaces);
+
+//    var cost = _blockChainService.ConvertFromWei(
+//        costAmont,
+//        tokenData.PriceDecimalPlaces);
+
+//    var finalAmount = (withdraw + profit) - cost;
+
+//    var withdrawal = new Withdrawal
+//    {
+//        WithdrawalRerefence = Guid.NewGuid().ToString("N"),
+//        StakeReference = stake.StakeReference,
+//        WalletAddress = stake.WalletAddress,
+//        Symbol = stake.TokenSymbol,
+//        Network = stake.TokenNetworkName,
+//        Amount = withdraw,
+//        Cost = cost,
+//        ProfitAmount = profit,
+//        FinalAmount = finalAmount,
+//        Type = WithdrawalType.StakeWithdrawal,
+//        State = WithdrawalState.Success,
+//        RegisterMoment = now,
+//        Hash = hash,
+//    };
+
+//    await _withdrawalRepository.InsertOneAsync(withdrawal);
+//    await SyncStakeWithdrawalsAsync(stake.StakeReference, false, true);
+
+//    var shortHash = hash[..10];
+
+//    await _hubContext.Clients
+//    .Group(stake.WalletAddress)
+//    .SendAsync(
+//        "PaymentMessage",
+//        $"Your staking withdrawal was processed successfully. You received {finalAmount:N4} {stake.TokenSymbol}."
+//    );
+//}
 //public async Task<WithdrawalResult> WithdrawStakeProfitAsync(WithdrawStakeProfitUpdate update, string publicKey, string evmWalletAddress)
 //{
 

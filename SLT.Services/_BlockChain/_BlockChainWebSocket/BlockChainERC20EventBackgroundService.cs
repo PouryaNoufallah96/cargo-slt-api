@@ -603,14 +603,14 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     return;
                 }
 
-                var earlyWithdrawn = log.DecodeEvent<EarlyWithdrawnEventDTO>();
+                //var earlyWithdrawn = log.DecodeEvent<EarlyWithdrawnEventDTO>();
 
-                if (earlyWithdrawn != null)
-                {
-                    await CreateEarlyWithdrawnLogAsync(log, earlyWithdrawn, cancellationToken);
+                //if (earlyWithdrawn != null)
+                //{
+                //    await CreateEarlyWithdrawnLogAsync(log, earlyWithdrawn, cancellationToken);
 
-                    return;
-                }
+                //    return;
+                //}
 
                 var profitWithdrawn = log.DecodeEvent<ProfitWithdrawnEventDTO>();
 
@@ -691,54 +691,54 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-        private async Task CreateEarlyWithdrawnLogAsync(FilterLog log, EventLog<EarlyWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
-                _logger.LogInformation(
-                  "{prefix} EarlyWithdrawn | DepositId: {DepositId}, Depositor: {Depositor}",
-                  StakeLogPrefix,
-                  depositId,
-                  eLog.Event.Depositor
-              );
+        //private async Task CreateEarlyWithdrawnLogAsync(FilterLog log, EventLog<EarlyWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        //{
+        //    try
+        //    {
+        //        var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+        //        _logger.LogInformation(
+        //          "{prefix} EarlyWithdrawn | DepositId: {DepositId}, Depositor: {Depositor}",
+        //          StakeLogPrefix,
+        //          depositId,
+        //          eLog.Event.Depositor
+        //      );
 
-                SentrySdk.CaptureMessage(
-                    $"{StakeLogPrefix} EarlyWithdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
-                );
-                await _transactionLogService.CreateEarlyWithdrawnLogAsync(
-                    new _TransactionLog.DTOs.EarlyWithdrawnLog
-                    {
-                        Hash = log.TransactionHash,
-                        Address = log.Address,
-                        BlockNumber = log.BlockNumber!.Value,
-                        DepositId = depositId,
-                        Depositor = eLog.Event.Depositor,
-                        WithdrawAmount = eLog.Event.WithdrawAmount,
-                        ProfitAmount = eLog.Event.ProfitAmount,
-                        FinalPayoutAmount = eLog.Event.FinalPayoutAmount,
-                        ClaimedProfitAmount = eLog.Event.ClaimedProfitAmount,
-                        EventType = Domain.Collections.BlockchainEventType.EarlyWithdrawn,
-                        Network = NetworkName
-                    });
+        //        SentrySdk.CaptureMessage(
+        //            $"{StakeLogPrefix} EarlyWithdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
+        //        );
+        //        await _transactionLogService.CreateEarlyWithdrawnLogAsync(
+        //            new _TransactionLog.DTOs.EarlyWithdrawnLog
+        //            {
+        //                Hash = log.TransactionHash,
+        //                Address = log.Address,
+        //                BlockNumber = log.BlockNumber!.Value,
+        //                DepositId = depositId,
+        //                Depositor = eLog.Event.Depositor,
+        //                WithdrawAmount = eLog.Event.WithdrawAmount,
+        //                ProfitAmount = eLog.Event.ProfitAmount,
+        //                FinalPayoutAmount = eLog.Event.FinalPayoutAmount,
+        //                ClaimedProfitAmount = eLog.Event.ClaimedProfitAmount,
+        //                EventType = Domain.Collections.BlockchainEventType.EarlyWithdrawn,
+        //                Network = NetworkName
+        //            });
 
-                _lastEventReceived = DateTime.UtcNow;
+        //        _lastEventReceived = DateTime.UtcNow;
 
-                //lock (_blockLock)
-                //{
-                //    _lastProcessedBlock = BigInteger.Max(
-                //        _lastProcessedBlock,
-                //        log.BlockNumber.Value + 1
-                //    );
-                //}
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "{Prefix} EarlyWithdrawn failed", StakeLogPrefix);
+        //        //lock (_blockLock)
+        //        //{
+        //        //    _lastProcessedBlock = BigInteger.Max(
+        //        //        _lastProcessedBlock,
+        //        //        log.BlockNumber.Value + 1
+        //        //    );
+        //        //}
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "{Prefix} EarlyWithdrawn failed", StakeLogPrefix);
 
-                throw;
-            }
-        }
+        //        throw;
+        //    }
+        //}
 
         private async Task CreateProfitWithdrawnLogAsync(FilterLog log, EventLog<ProfitWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
         {

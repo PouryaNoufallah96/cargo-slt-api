@@ -13,7 +13,7 @@ namespace SLT.Services._TransactionLog
 
 
         Task CreateDepositCreatedLogAsync(DepositCreatedLog input);
-        Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input);
+        //Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input);
         Task CreateProfitWithdrawnLogAsync(ProfitWithdrawnLog input);
         Task CreateWithdrawnLogAsync(WithdrawnLog input);
         Task<BigInteger> GetDepositLastCheckedBlockNumberAsync(string network = "BEP20");
