@@ -1,0 +1,76 @@
+# SLT.Api — GitLab CI/CD
+#
+# DISABLED: this file is named `.gitlab-ci.yml.disabled` on purpose so GitLab does not
+# pick it up — no pipeline runs while it sits off the default CI config path. To enable,
+# register the self-hosted runner and set the CI/CD variables (see docs/CI.md "One-time
+# server setup"), then rename this file back to `.gitlab-ci.yml`.
+#
+# Gates every MR into `main` on a Release build + a csharpier format check (GitLab
+# shared runners), and deploys on demand to the production box via a self-hosted,
+# tagged runner. Zero secret migration: secrets stay on the box in $DEPLOY_ENV_FILE.
+# See docs/CI.md for stages, triggers, and one-time runner setup.
+
+stages: [build, quality, deploy]
+
+variables:
+  NUGET_PACKAGES: "$CI_PROJECT_DIR/.nuget/packages"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  API_PROJECT: "SLT.Api/SLT.Api.csproj"
+  # Server-side secret file the compose `$var` substitutions read (see docker-compose.yml).
+  # CONFIRM the real path on the prod box; override in Settings → CI/CD → Variables.
+  DEPLOY_ENV_FILE: "/srv/slt.api/.env"
+  # Compose project name. Compose otherwise derives it from the checkout-dir basename, which
+  # differs from deploy.sh's dir on the box — so the CI `down`/`up` would target a DIFFERENT
+  # project than the running container and collide on the pinned container_name. Pin it so CI
+  # owns one stable project. CONFIRM it matches the box (see the cutover step in docs/CI.md);
+  # this box also hosts slt.manage, so keep the names distinct. Override in CI/CD Variables.
+  COMPOSE_PROJECT_NAME: "sltapi"
+
+# Run for MR events + the main branch only. Prevents the #1 GitLab .NET pitfall:
+# a duplicate branch pipeline firing alongside every MR pipeline.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - when: never
+
+# Shared base for the CI jobs that run on GitLab shared runners.
+.dotnet:
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  cache:
+    key:
+      files: [SLT.Api/SLT.Api.csproj]
+    paths: [.nuget/packages]
+
+build:                                    # build the .csproj (NOT .slnx — sdk:8.0 image)
+  extends: .dotnet
+  stage: build
+  script:
+    - dotnet restore $API_PROJECT
+    - dotnet build $API_PROJECT -c Release --no-restore
+
+format:                                   # csharpier, pinned via .config/dotnet-tools.json
+  extends: .dotnet
+  stage: quality
+  # Advisory until a dedicated `dotnet csharpier format .` reformat commit lands; then
+  # delete allow_failure to make the gate blocking (the tree isn't csharpier-clean yet).
+  allow_failure: true
+  script:
+    - dotnet tool restore
+    - dotnet csharpier check .
+
+deploy:                                   # runs on the self-hosted runner on the prod box
+  stage: deploy
+  tags: [sltapi-prod]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual                        # ▶ click only — never automatic
+  environment:
+    name: production
+  script:                                 # mirrors deploy.sh (docker-compose v1; single service, no --build)
+    - dotnet publish $API_PROJECT -c Release -o publish
+    - docker build -t slt.api .
+    - docker-compose --env-file "$DEPLOY_ENV_FILE" down || true
+    - docker-compose --env-file "$DEPLOY_ENV_FILE" up -d
+    - docker-compose --env-file "$DEPLOY_ENV_FILE" ps

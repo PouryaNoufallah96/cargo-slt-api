@@ -347,3 +347,11 @@ healthchecksdb
 .env.development
 .env.production
 .env.test
+
+# GoalBuddy (goal-prep) — regenerable board web app + per-goal boards are local working state
+**/.goalbuddy-board/
+docs/goals/
+
+# macOS Finder metadata
+.DS_Store
+**/.DS_Store
