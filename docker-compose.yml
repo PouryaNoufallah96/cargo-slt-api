@@ -36,9 +36,11 @@ services:
       # Blockchain
       - BlockChainSettings__RpcUrl=$blockchainsettings_rpc_url
       - BlockChainSettings__RpcUrl2=$blockchainsettings_rpc_url2
-      - BlockChainSettings__ERC20RpcUrl=$blockchainsettings_erc_rpc
+      - BlockChainSettings__ERC20RpcUrl=$blockchainsettings_erc20_rpc_url
       - BlockChainSettings__ContractAddress=$blockchainsettings_contract_address
-      - BlockChainSettings__ERC20ContractAddress=$blockchainsettings_erc_contract_address
+      - BlockChainSettings__ERC20ContractAddress=$blockchainsettings_erc20_contract_address
+      - BlockChainSettings__BEP20StakeContractAddress=$blockchainsettings_bep20_stake_contract_address
+      - BlockChainSettings__ERC20StakeContractAddress=$blockchainsettings_erc20_stake_contract_address
       - BlockChainSettings__PrivateKey=$blockchainsettings_private_key
       - BlockChainSettings__PublicAddress=$blockchainsettings_public_address
       - BlockChainSettings__ChainId=$blockchainsettings_chain_id
