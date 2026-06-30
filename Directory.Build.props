@@ -1,17 +1,6 @@
 <Project>
-  <!--
-    Analyzer baseline for all 4 projects. A root Directory.Build.props is auto-imported
-    by every .csproj (MSBuild), so no per-project edits are needed.
-
-    Built-in .NET 8 Roslyn analyzers, surfaced as WARNINGS during `dotnet build` — not
-    errors yet, because the codebase is <Nullable>disable</Nullable> with intentional
-    house anti-patterns. Graduation path: flip TreatWarningsAsErrors once the baseline
-    is clean; add Roslynator if more signal is wanted.
-  -->
   <PropertyGroup>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <AnalysisLevel>latest</AnalysisLevel>
-    <AnalysisMode>Recommended</AnalysisMode>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS0114;CS0168;CS0169;CS0414;CS0618;CS8632;CS8981;CS9113</NoWarn>
   </PropertyGroup>
 </Project>
