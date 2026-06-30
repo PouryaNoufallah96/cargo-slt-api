@@ -41,6 +41,10 @@ namespace SLT.Domain.Collections
         DepositCreated,
         EarlyWithdrawn,
         ProfitWithdrawn,
-        WithdrawnAll
+        WithdrawnAll,
+        LockedInvoiceCreated,
+        LockedInvoicePaid,
+        LockedInvoiceApproved,
+        LockedInvoiceResolved
     }
 }

@@ -144,11 +144,12 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 _lastinvoiceProcessedBlock = await GetInvoiceLastProcessedBlock(cancellationToken);
             }
 
-            if (_lastinvoiceProcessedBlock >= latestBlock) return;
+	            if (_lastinvoiceProcessedBlock >= latestBlock) return;
 
-            const int blockChunk = 2000;
+	            const int blockChunk = 2000;
+	            var hasInvoiceLogError = false;
 
-            BigInteger fromBlock = _lastinvoiceProcessedBlock;
+	            BigInteger fromBlock = _lastinvoiceProcessedBlock;
 
             while (fromBlock <= latestBlock)
             {
@@ -182,42 +183,95 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                             var paid = log.DecodeEvent<InvoicePaidEventDTO>();
 
                             if (paid != null)
-                            {
-                                await CreateInvoicePaidLogAsync(log, paid, cancellationToken);
-                                continue;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "{Prefix} Error decoding invoice log", InvoiceLogPrefix);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "{Prefix} Error polling invoice logs from {FromBlock} to {ToBlock}",
-                        InvoiceLogPrefix,
-                        fromBlock,
-                        toBlock);
-                }
+	                            {
+	                                await CreateInvoicePaidLogAsync(log, paid, cancellationToken);
+	                                continue;
+	                            }
+
+	                            var lockedCreated = log.DecodeEvent<LockedInvoiceCreatedEventDTO>();
+
+	                            if (lockedCreated != null)
+	                            {
+	                                await CreateLockedInvoiceCreatedLogAsync(log, lockedCreated, cancellationToken);
+	                                continue;
+	                            }
+
+	                            var lockedPaid = log.DecodeEvent<LockedInvoicePaidEventDTO>();
+
+	                            if (lockedPaid != null)
+	                            {
+	                                await CreateLockedInvoicePaidLogAsync(log, lockedPaid, cancellationToken);
+	                                continue;
+	                            }
+
+	                            var lockedApproved = log.DecodeEvent<LockedInvoiceApprovedEventDTO>();
+
+	                            if (lockedApproved != null)
+	                            {
+	                                await CreateLockedInvoiceApprovedLogAsync(log, lockedApproved, cancellationToken);
+	                                continue;
+	                            }
+
+	                            var lockedResolved = log.DecodeEvent<LockedInvoiceResolvedEventDTO>();
+
+	                            if (lockedResolved != null)
+	                            {
+	                                await CreateLockedInvoiceResolvedLogAsync(log, lockedResolved, cancellationToken);
+	                                continue;
+	                            }
+
+	                            _logger.LogWarning(
+	                                "{Prefix} Unrecognized invoice contract event. Block: {Block}, TxHash: {TxHash}, Topic0: {Topic0}",
+	                                InvoiceLogPrefix,
+	                                log.BlockNumber?.Value,
+	                                log.TransactionHash,
+	                                log.Topics != null && log.Topics.Length > 0 ? log.Topics[0]?.ToString() : null);
+	                        }
+	                        catch (Exception ex)
+	                        {
+	                            hasInvoiceLogError = true;
+	                            _logger.LogError(ex, "{Prefix} Error decoding invoice log", InvoiceLogPrefix);
+	                            throw;
+	                        }
+	                    }
+	                }
+	                catch (Exception ex)
+	                {
+	                    hasInvoiceLogError = true;
+	                    _logger.LogError(
+	                        ex,
+	                        "{Prefix} Error polling invoice logs from {FromBlock} to {ToBlock}",
+	                        InvoiceLogPrefix,
+	                        fromBlock,
+	                        toBlock);
+	                    return;
+	                }
 
                 fromBlock = toBlock + 1;
 
                 await Task.Delay(3000, cancellationToken);
             }
 
-            lock (_blockLock)
-            {
-                _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, latestBlock);
+	            lock (_blockLock)
+	            {
+	                if (!hasInvoiceLogError)
+	                {
+	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, latestBlock);
 
-                _logger.LogInformation(
-                    "{Prefix} Polling completed until block {LatestBlock}",
-                    InvoiceLogPrefix,
-                    latestBlock);
-            }
-        }
+	                    _logger.LogInformation(
+	                        "{Prefix} Polling completed until block {LatestBlock}",
+	                        InvoiceLogPrefix,
+	                        latestBlock);
+	                }
+	                else
+	                {
+	                    _logger.LogWarning(
+	                        "{Prefix} Polling kept invoice cursor at {Block} because at least one log failed.",
+	                        InvoiceLogPrefix,
+	                        _lastinvoiceProcessedBlock);
+	                }
+	            }
+	        }
 
         private async Task CreateInvoiceCreatedLog(FilterLog log, EventLog<InvoiceCreatedEventDTO> eLog, CancellationToken cancellationToken)
         {
@@ -313,26 +367,162 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     }
                 );
 
-                //lock (_blockLock)
-                //{
-                //    _lastinvoiceProcessedBlock = BigInteger.Max(
-                //        _lastinvoiceProcessedBlock,
-                //        log.BlockNumber.Value + 1
-                //    );
-                //}
-            }
-            catch (Exception ex)
-            {
+	                lock (_blockLock)
+	                {
+	                    _lastinvoiceProcessedBlock = BigInteger.Max(
+	                        _lastinvoiceProcessedBlock,
+	                        log.BlockNumber.Value + 1
+	                    );
+	                }
+	            }
+	            catch (Exception ex)
+	            {
                 _logger.LogError(
                     ex,
                     "Error processing InvoicePaid event. TxHash: {TxHash}",
                     log.TransactionHash
                 );
-                throw;
-            }
-        }
+	                throw;
+	            }
+	        }
 
-        private async Task<HexBigInteger> GetInvoiceLastProcessedBlock(CancellationToken cancellationToken)
+	        private async Task CreateLockedInvoiceCreatedLogAsync(FilterLog log, EventLog<LockedInvoiceCreatedEventDTO> eLog, CancellationToken cancellationToken)
+	        {
+	            try
+	            {
+	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
+	                var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
+
+	                await _transactionLogService.CreateLockedInvoiceCreatedAsync(
+	                    new _TransactionLog.DTOs.LockedInvoiceCreatedLog
+	                    {
+	                        Hash = log.TransactionHash,
+	                        Address = log.Address,
+	                        BlockNumber = log.BlockNumber!.Value,
+	                        InvoiceId = invoiceId,
+	                        Creator = eLog.Event.Creator,
+	                        Token = eLog.Event.Token,
+	                        UsdAmount = eLog.Event.UsdAmount,
+	                        UnLockTime = unlockDate,
+	                        LockDuration = eLog.Event.LockDuration,
+	                        Approver = eLog.Event.Approver,
+	                        EventType = Domain.Collections.BlockchainEventType.LockedInvoiceCreated,
+	                        Network = NetworkName
+	                    }
+	                );
+
+	                lock (_blockLock)
+	                {
+	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                }
+	            }
+	            catch (Exception ex)
+	            {
+	                _logger.LogError(ex, "Error processing LockedInvoiceCreated event. TxHash: {TxHash}", log.TransactionHash);
+	                throw;
+	            }
+	        }
+
+	        private async Task CreateLockedInvoicePaidLogAsync(FilterLog log, EventLog<LockedInvoicePaidEventDTO> eLog, CancellationToken cancellationToken)
+	        {
+	            try
+	            {
+	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
+	                var lockedUntil = ConvertUnixSecondsToDateTime(eLog.Event.LockedUntil);
+
+	                await _transactionLogService.CreateLockedInvoicePaidAsync(
+	                    new _TransactionLog.DTOs.LockedInvoicePaidLog
+	                    {
+	                        Hash = log.TransactionHash,
+	                        Address = log.Address,
+	                        BlockNumber = log.BlockNumber!.Value,
+	                        InvoiceId = invoiceId,
+	                        Payer = eLog.Event.Payer,
+	                        Token = eLog.Event.Token,
+	                        PayAmount = eLog.Event.PayAmount,
+	                        LockedUntil = lockedUntil,
+	                        EventType = Domain.Collections.BlockchainEventType.LockedInvoicePaid,
+	                        Network = NetworkName
+	                    }
+	                );
+
+	                lock (_blockLock)
+	                {
+	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                }
+	            }
+	            catch (Exception ex)
+	            {
+	                _logger.LogError(ex, "Error processing LockedInvoicePaid event. TxHash: {TxHash}", log.TransactionHash);
+	                throw;
+	            }
+	        }
+
+	        private async Task CreateLockedInvoiceApprovedLogAsync(FilterLog log, EventLog<LockedInvoiceApprovedEventDTO> eLog, CancellationToken cancellationToken)
+	        {
+	            try
+	            {
+	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
+
+	                await _transactionLogService.CreateLockedInvoiceApprovedAsync(
+	                    new _TransactionLog.DTOs.LockedInvoiceApprovedLog
+	                    {
+	                        Hash = log.TransactionHash,
+	                        Address = log.Address,
+	                        BlockNumber = log.BlockNumber!.Value,
+	                        InvoiceId = invoiceId,
+	                        Approver = eLog.Event.Approver,
+	                        EventType = Domain.Collections.BlockchainEventType.LockedInvoiceApproved,
+	                        Network = NetworkName
+	                    }
+	                );
+
+	                lock (_blockLock)
+	                {
+	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                }
+	            }
+	            catch (Exception ex)
+	            {
+	                _logger.LogError(ex, "Error processing LockedInvoiceApproved event. TxHash: {TxHash}", log.TransactionHash);
+	                throw;
+	            }
+	        }
+
+	        private async Task CreateLockedInvoiceResolvedLogAsync(FilterLog log, EventLog<LockedInvoiceResolvedEventDTO> eLog, CancellationToken cancellationToken)
+	        {
+	            try
+	            {
+	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
+
+	                await _transactionLogService.CreateLockedInvoiceResolvedAsync(
+	                    new _TransactionLog.DTOs.LockedInvoiceResolvedLog
+	                    {
+	                        Hash = log.TransactionHash,
+	                        Address = log.Address,
+	                        BlockNumber = log.BlockNumber!.Value,
+	                        InvoiceId = invoiceId,
+	                        Beneficiary = eLog.Event.Beneficiary,
+	                        Amount = eLog.Event.Amount,
+	                        FeeAmount = eLog.Event.FeeAmount,
+	                        EventType = Domain.Collections.BlockchainEventType.LockedInvoiceResolved,
+	                        Network = NetworkName
+	                    }
+	                );
+
+	                lock (_blockLock)
+	                {
+	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                }
+	            }
+	            catch (Exception ex)
+	            {
+	                _logger.LogError(ex, "Error processing LockedInvoiceResolved event. TxHash: {TxHash}", log.TransactionHash);
+	                throw;
+	            }
+	        }
+
+	        private async Task<HexBigInteger> GetInvoiceLastProcessedBlock(CancellationToken cancellationToken)
         {
 
             try
@@ -346,33 +536,13 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 var lastDbBlock = await _transactionLogService.GetInvoiceLastCheckedBlockNumberAsync(NetworkName);
 
-                lock (_blockLock)
-                {
-                    _lastinvoiceProcessedBlock = lastDbBlock;
-                }
+	                lock (_blockLock)
+	                {
+	                    _lastinvoiceProcessedBlock = lastDbBlock;
+	                    return _lastinvoiceProcessedBlock.ToHexBigInteger();
+	                }
 
-                if (_lastinvoiceProcessedBlock > 0)
-                    return _lastinvoiceProcessedBlock.ToHexBigInteger();
-
-                try
-                {
-                    var latestBlockNumber = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-
-                    lock (_blockLock)
-                    {
-                        _lastinvoiceProcessedBlock = latestBlockNumber;
-                        return latestBlockNumber;
-                    }
-
-
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e.Message);
-                    throw;
-                }
-
-            }
+	            }
             catch (Exception e)
             {
                 SentrySdk.CaptureException(e);

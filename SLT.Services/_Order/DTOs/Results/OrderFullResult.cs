@@ -33,6 +33,9 @@ namespace SLT.Services._Order.DTOs.Results
         public string RegisterHash { get; set; } = null;
         public string PaymentHash { get; set; } = null;
         public DateTime? ActivateDate { get; set; } = null;
+        public bool IsLocked { get; set; }
+        public int? LockDurationMonths { get; set; }
+        public string ApproverWallet { get; set; } = null;
         public OwnershipType OwnershipType { get; set; }
 
     }

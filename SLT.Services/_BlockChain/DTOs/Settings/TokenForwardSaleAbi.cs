@@ -129,21 +129,206 @@
         ""outputs"": [],
         ""stateMutability"": ""nonpayable""
     },
-    {
-        ""type"": ""function"",
-        ""name"": ""deleteInvoice"",
-        ""inputs"": [
-            {
-                ""name"": ""invoiceId"",
-                ""type"": ""bytes32"",
-                ""internalType"": ""bytes32""
-            }
-        ],
-        ""outputs"": [],
-        ""stateMutability"": ""nonpayable""
-    },
-    {
-        ""type"": ""event"",
+	    {
+	        ""type"": ""function"",
+	        ""name"": ""deleteInvoice"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""internalType"": ""bytes32""
+	            }
+	        ],
+	        ""outputs"": [],
+	        ""stateMutability"": ""nonpayable""
+	    },
+	    {
+	        ""type"": ""function"",
+	        ""name"": ""createOrderedLockedInvoice"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""receiver"",
+	                ""type"": ""address"",
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""ids"",
+	                ""type"": ""bytes32[]"",
+	                ""internalType"": ""bytes32[]""
+	            },
+	            {
+	                ""name"": ""tokens"",
+	                ""type"": ""address[]"",
+	                ""internalType"": ""address[]""
+	            },
+	            {
+	                ""name"": ""usdAmounts"",
+	                ""type"": ""uint256[]"",
+	                ""internalType"": ""uint256[]""
+	            },
+	            {
+	                ""name"": ""unlockTimes"",
+	                ""type"": ""uint256[]"",
+	                ""internalType"": ""uint256[]""
+	            },
+	            {
+	                ""name"": ""lockDurations"",
+	                ""type"": ""uint256[]"",
+	                ""internalType"": ""uint256[]""
+	            },
+	            {
+	                ""name"": ""approvers"",
+	                ""type"": ""address[]"",
+	                ""internalType"": ""address[]""
+	            }
+	        ],
+	        ""outputs"": [],
+	        ""stateMutability"": ""nonpayable""
+	    },
+	    {
+	        ""type"": ""function"",
+	        ""name"": ""createQuickLockedInvoice"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""id"",
+	                ""type"": ""bytes32"",
+	                ""internalType"": ""bytes32""
+	            },
+	            {
+	                ""name"": ""receiver"",
+	                ""type"": ""address"",
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""token"",
+	                ""type"": ""address"",
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""usdAmount"",
+	                ""type"": ""uint256"",
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""lockDuration"",
+	                ""type"": ""uint256"",
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""approver"",
+	                ""type"": ""address"",
+	                ""internalType"": ""address""
+	            }
+	        ],
+	        ""outputs"": [],
+	        ""stateMutability"": ""nonpayable""
+	    },
+	    {
+	        ""type"": ""function"",
+	        ""name"": ""approveLockedInvoice"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""internalType"": ""bytes32""
+	            }
+	        ],
+	        ""outputs"": [],
+	        ""stateMutability"": ""nonpayable""
+	    },
+	    {
+	        ""type"": ""function"",
+	        ""name"": ""getInvoice"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""internalType"": ""bytes32""
+	            }
+	        ],
+	        ""outputs"": [
+	            {
+	                ""name"": """",
+	                ""type"": ""tuple"",
+	                ""internalType"": ""struct TokenForwardSale.Invoice"",
+	                ""components"": [
+	                    {
+	                        ""name"": ""invoiceId"",
+	                        ""type"": ""bytes32"",
+	                        ""internalType"": ""bytes32""
+	                    },
+	                    {
+	                        ""name"": ""creator"",
+	                        ""type"": ""address"",
+	                        ""internalType"": ""address""
+	                    },
+	                    {
+	                        ""name"": ""payer"",
+	                        ""type"": ""address"",
+	                        ""internalType"": ""address""
+	                    },
+	                    {
+	                        ""name"": ""token"",
+	                        ""type"": ""address"",
+	                        ""internalType"": ""address""
+	                    },
+	                    {
+	                        ""name"": ""usdAmount"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""payAmount"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""unlockTime"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""lockDuration"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""approver"",
+	                        ""type"": ""address"",
+	                        ""internalType"": ""address""
+	                    },
+	                    {
+	                        ""name"": ""lockedUntil"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""stakedPayout"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""profitClaimed"",
+	                        ""type"": ""uint256"",
+	                        ""internalType"": ""uint256""
+	                    },
+	                    {
+	                        ""name"": ""approved"",
+	                        ""type"": ""bool"",
+	                        ""internalType"": ""bool""
+	                    },
+	                    {
+	                        ""name"": ""settled"",
+	                        ""type"": ""bool"",
+	                        ""internalType"": ""bool""
+	                    }
+	                ]
+	            }
+	        ],
+	        ""stateMutability"": ""view""
+	    },
+	    {
+	        ""type"": ""event"",
         ""name"": ""InvoiceCreated"",
         ""inputs"": [
             {
@@ -210,20 +395,156 @@
         ],
         ""anonymous"": false
     },
-    {
-        ""type"": ""event"",
-        ""name"": ""InvoiceDeleted"",
-        ""inputs"": [
-            {
-                ""name"": ""invoiceId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            }
-        ],
-        ""anonymous"": false
-    }
-]
+	    {
+	        ""type"": ""event"",
+	        ""name"": ""InvoiceDeleted"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""indexed"": false,
+	                ""internalType"": ""bytes32""
+	            }
+	        ],
+	        ""anonymous"": false
+	    },
+	    {
+	        ""type"": ""event"",
+	        ""name"": ""LockedInvoiceCreated"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""indexed"": false,
+	                ""internalType"": ""bytes32""
+	            },
+	            {
+	                ""name"": ""creator"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""token"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""usdAmount"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""unlockTime"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""lockDuration"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""approver"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            }
+	        ],
+	        ""anonymous"": false
+	    },
+	    {
+	        ""type"": ""event"",
+	        ""name"": ""LockedInvoicePaid"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""indexed"": false,
+	                ""internalType"": ""bytes32""
+	            },
+	            {
+	                ""name"": ""payer"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""token"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""payAmount"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""lockedUntil"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            }
+	        ],
+	        ""anonymous"": false
+	    },
+	    {
+	        ""type"": ""event"",
+	        ""name"": ""LockedInvoiceApproved"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""indexed"": false,
+	                ""internalType"": ""bytes32""
+	            },
+	            {
+	                ""name"": ""approver"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            }
+	        ],
+	        ""anonymous"": false
+	    },
+	    {
+	        ""type"": ""event"",
+	        ""name"": ""LockedInvoiceResolved"",
+	        ""inputs"": [
+	            {
+	                ""name"": ""invoiceId"",
+	                ""type"": ""bytes32"",
+	                ""indexed"": false,
+	                ""internalType"": ""bytes32""
+	            },
+	            {
+	                ""name"": ""beneficiary"",
+	                ""type"": ""address"",
+	                ""indexed"": false,
+	                ""internalType"": ""address""
+	            },
+	            {
+	                ""name"": ""amount"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            },
+	            {
+	                ""name"": ""feeAmount"",
+	                ""type"": ""uint256"",
+	                ""indexed"": false,
+	                ""internalType"": ""uint256""
+	            }
+	        ],
+	        ""anonymous"": false
+	    }
+	]
     ";
 
         public const string StakeAbi = @"

@@ -85,6 +85,16 @@ namespace SLT.Api.Controllers.V1
             return await _orderService.GetInvoiceDetailAsync(update,WalletAddress);
         }
 
+        [HttpPost("[action]")]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = false)]
+        [SwaggerOperation(Summary = "Get locked invoice detail", Tags = ["Invoice"])]
+        public async Task<LockedInvoiceDetailResult> GetLockedInvoiceDetailAsync(
+            InvoiceIdUpdate update)
+        {
+            return await _orderService.GetLockedInvoiceDetailAsync(update, WalletAddress);
+        }
+
 
         [HttpPost("[action]")]
         [CustomRateLimit]
