@@ -29,6 +29,23 @@ the rest are internal (hubs, background sync, helpers).
 `OrderController`, `StakeController`, `UserController`. (Note: `UserController` declares the stale
 `CoinHalls.Api.Controllers.V1` namespace — see CLAUDE.md.)
 
+### Locked invoice (Conditional Payment)
+
+Separate API surface — **do not** add lock fields to normal create DTOs.
+
+| Piece | Location |
+|-------|----------|
+| Endpoints | `OrderController`: `CreatePendingLockedQuickOrderAsync`, `CreatePendingLockedMultiStepOrderAsync`, `GetLockedInvoiceDetailAsync` |
+| Create DTOs | `_Order/DTOs/Updates/CreateLockedQuickInvoiceUpdate.cs`, `CreateLockedMultiStepOrderUpdate.cs` |
+| Result DTOs | `_Order/DTOs/Results/LockedOrderFullResult.cs`, `LockedInvoiceDetailResult.cs`, `LockedInvoiceSyncResult.cs` |
+| Config | `_Order/DTOs/Settings/LockedInvoiceSettings.cs` → `RegisterSetting` in `ControllerServiceCollectionExtensions.cs`; docker env in `docker-compose.yml` |
+| Domain | `Invoice.Lock` (`LockDetail`), `LockState` enum — `SLT.Domain/Collections/Invoice.cs` |
+| Sync | `OrderService.SyncLockedInvoice*Async`; `TransactionLogService.CreateLockedInvoice*Async` |
+| Chain read | `BlockChainService.GetLockedInvoiceAsync` → `LockedInvoiceChainResult` |
+| Listeners | `_BlockChain/_BlockChainWebSocket/*` — decode `LockedInvoiceCreated/Paid/Approved/Resolved` after normal invoice events |
+| Frontend handover | `docs/handover/locked-invoice-frontend-handover.md` (+ `-fa.md`) |
+| ADRs | `docs/adr/0001-locked-invoice-embedded-subdocument.md`, `0002-multi-step-locked-invoice-all-or-nothing.md` |
+
 ## "To add X, edit Y"
 
 | To add… | Do this |
@@ -46,7 +63,7 @@ the rest are internal (hubs, background sync, helpers).
 
 | File | Purpose |
 |------|---------|
-| `SLT.Api/appsettings.json` | All config sections (Monjo, Jwt, Firewall, BlockChain, Stake, …). **Contains committed secrets — see docs/SECURITY.md.** |
+| `SLT.Api/appsettings.json` | All config sections (Monjo, Jwt, Firewall, BlockChain, Stake, LockedInvoiceSettings, …). **Contains committed secrets — see docs/SECURITY.md.** |
 | `Dockerfile` | Runtime image (`aspnet:8.0`, runs `SLT.Api.dll` from `./publish/`). |
 | `docker-compose.yml` | Injects secrets via host env vars; container `api.sltcargopay.com`, bound `127.0.0.1:3009`. |
 | `deploy.sh` | build → publish → docker build → compose up → tail logs. |
@@ -54,5 +71,5 @@ the rest are internal (hubs, background sync, helpers).
 ## AI layer
 
 `.claude/` (rules, commands, hooks, scripts, skill symlinks) · `.agents/skills/` (canonical skills) ·
-`docs/` (ARCHITECTURE, SECURITY, WORKFLOW, agents, adr) · `CONTEXT.md` · root `CLAUDE.md` (AI entry point). See
+`docs/` (ARCHITECTURE, SECURITY, WORKFLOW, adr, handover) · `CONTEXT.md` · root `CLAUDE.md` (AI entry point). See
 `.claude/README.md`.

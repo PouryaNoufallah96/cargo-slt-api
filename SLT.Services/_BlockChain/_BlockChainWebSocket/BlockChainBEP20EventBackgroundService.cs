@@ -425,7 +425,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     await CreateInvoicePaidLogAsync(log, paid, cancellationToken);
                     return;
                 }
-
                 var lockedCreated = log.DecodeEvent<LockedInvoiceCreatedEventDTO>();
 
                 if (lockedCreated != null)
@@ -458,12 +457,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     return;
                 }
 
-                _logger.LogWarning(
-                    "{Prefix} Unrecognized invoice contract event. Block: {Block}, TxHash: {TxHash}, Topic0: {Topic0}",
-                    InvoiceLogPrefix,
-                    log.BlockNumber?.Value,
-                    log.TransactionHash,
-                    log.Topics != null && log.Topics.Length > 0 ? log.Topics[0]?.ToString() : null);
             }
             catch (Exception ex)
             {
@@ -534,11 +527,6 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                     });
 
                 _lastEventReceived = DateTime.UtcNow;
-
-                lock (_blockLock)
-                {
-                    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
-                }
             }
             catch (Exception ex)
             {
@@ -551,6 +539,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
+                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
                 var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
 
@@ -589,6 +579,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
+                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
                 var lockedUntil = ConvertUnixSecondsToDateTime(eLog.Event.LockedUntil);
 
@@ -625,6 +617,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
+                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
                 await _transactionLogService.CreateLockedInvoiceApprovedAsync(
@@ -657,6 +651,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
+                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
                 await _transactionLogService.CreateLockedInvoiceResolvedAsync(
@@ -704,7 +700,20 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 lock (_blockLock)
                 {
                     _invoiceLastProcessedBlock = lastDbBlock;
+                }
+
+                if (_invoiceLastProcessedBlock > 0)
+                {
                     return _invoiceLastProcessedBlock.ToHexBigInteger();
+                }
+
+                var latestBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                lock (_blockLock)
+                {
+                    _invoiceLastProcessedBlock = latestBlock;
+
+                    return latestBlock;
                 }
             }
             catch (Exception ex)
@@ -714,6 +723,17 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 SwitchRpc();
                 InitializeClients();
                 throw;
+            }
+        }
+
+        private async Task EnsureInvoiceEventCursorIncludesLockedEventsAsync()
+        {
+            var combinedBlock = await _transactionLogService.GetCombinedInvoiceEventLastCheckedBlockNumberAsync(NetworkName);
+
+            lock (_blockLock)
+            {
+                if (_invoiceLastProcessedBlock < combinedBlock)
+                    _invoiceLastProcessedBlock = combinedBlock;
             }
         }
 

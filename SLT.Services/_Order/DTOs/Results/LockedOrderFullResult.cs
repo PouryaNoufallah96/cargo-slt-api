@@ -1,19 +1,18 @@
-﻿using SLT.Domain.Collections;
+using SLT.Domain.Collections;
 
 namespace SLT.Services._Order.DTOs.Results
 {
-    public class OrderFullResult : OrderResult
-    {   
-        public List<InvoiceResult> Invoices { get; set; }
-        public OwnershipType OwnershipType { get; set; } 
+    public class LockedOrderFullResult : OrderResult
+    {
+        public List<LockedInvoiceCreateResult> Invoices { get; set; }
+        public OwnershipType OwnershipType { get; set; }
     }
-    public enum OwnershipType { Owner, Payer }
 
-    public class InvoiceResult
+    public class LockedInvoiceCreateResult
     {
         public DateTime CreatedMoment { get; set; }
         public DateTime? ModifiedMoment { get; set; }
-        public string InvoiceId { get; set; } 
+        public string InvoiceId { get; set; }
         public string OwnerWallet { get; set; }
         public string PayerWallet { get; set; }
         public string OrderId { get; set; }
@@ -23,19 +22,16 @@ namespace SLT.Services._Order.DTOs.Results
         public decimal USDTAmount { get; set; }
         public string USDTAmountInWei { get; set; }
         public string Desctiption { get; set; }
-
         public decimal? TokenAmountAtPayment { get; set; }
-        public string? TokenAmountWeiAtPayment { get; set; }
+        public string TokenAmountWeiAtPayment { get; set; }
         public decimal? TokenPriceAtPayment { get; set; }
-
         public InvoiceState State { get; set; } = InvoiceState.Pending;
         public DateTime? PayMoment { get; set; } = null;
         public string RegisterHash { get; set; } = null;
         public string PaymentHash { get; set; } = null;
         public DateTime? ActivateDate { get; set; } = null;
+        public int LockDurationMonths { get; set; }
+        public string ApproverWallet { get; set; } = null;
         public OwnershipType OwnershipType { get; set; }
-
     }
-
-
 }

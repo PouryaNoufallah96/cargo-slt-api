@@ -50,6 +50,34 @@ namespace SLT.Api.Controllers.V1
 
         [HttpPost("[action]")]
         [CustomRateLimit]
+        [Authorize(RequireActiveUser = true)]
+        [SwaggerOperation(Summary = "Create Pending locked quick order", Tags = ["Order"])]
+        public async Task<LockedOrderFullResult> CreatePendingLockedQuickOrderAsync(
+            CreateLockedQuickInvoiceUpdate update)
+        {
+            return await _orderService.CreatePendingLockedQuickOrderAsync(
+                update,
+                WalletAddress,
+                NetworkType
+            );
+        }
+
+        [HttpPost("[action]")]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = true)]
+        [SwaggerOperation(Summary = "Create Pending locked multi step order", Tags = ["Order"])]
+        public async Task<LockedOrderFullResult> CreatePendingLockedMultiStepOrderAsync(
+            CreateLockedMultiStepOrderUpdate update)
+        {
+            return await _orderService.CreatePendingLockedMultiStepOrderAsync(
+                update,
+                WalletAddress,
+                NetworkType
+            );
+        }
+
+        [HttpPost("[action]")]
+        [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get user orders list", Tags = ["Order"])]
         public async Task<OrderListResult> GetOrderListAsync(

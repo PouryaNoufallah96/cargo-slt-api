@@ -9,6 +9,7 @@ using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
 using SLT.Services._BlockChain._MultiCallService;
 using SLT.Services._BlockChain._MultiCallService.DTOs;
+using SLT.Services._BlockChain.DTOs.Results;
 using SLT.Services._BlockChain.DTOs.Settings;
 using SLT.Services._BlockChain.DTOs.Updates;
 using SLT.Services._Price.DTOs.Settings;
