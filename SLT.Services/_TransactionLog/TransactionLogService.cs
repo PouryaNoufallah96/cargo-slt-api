@@ -177,44 +177,43 @@ namespace SLT.Services._TransactionLog
                     _logger.LogWarning(
                         "Duplicate LockedInvoiceCreated log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
                         log.InvoiceId, log.Hash);
+                    return;
                 }
-                else
+
+                var tokenData = _availableTokenSetting.FirstOrDefault(q =>
+                    !string.IsNullOrWhiteSpace(log.Token) &&
+                    q.Address.ToLower() == log.Token.ToLower() &&
+                    q.Network.ToLower() == log.Network.ToLower());
+
+                var amount = tokenData != null
+                    ? _blockChainService.ConvertFromWei(log.UsdAmount, tokenData.PriceDecimalPlaces)
+                    : Web3.Convert.FromWei(log.UsdAmount);
+
+                var newLog = new TransactionLog
                 {
-                    var tokenData = _availableTokenSetting.FirstOrDefault(q =>
-                        !string.IsNullOrWhiteSpace(log.Token) &&
-                        q.Address.ToLower() == log.Token.ToLower() &&
-                        q.Network.ToLower() == log.Network.ToLower());
-
-                    var amount = tokenData != null
-                        ? _blockChainService.ConvertFromWei(log.UsdAmount, tokenData.PriceDecimalPlaces)
-                        : Web3.Convert.FromWei(log.UsdAmount);
-
-                    var newLog = new TransactionLog
+                    EventType = BlockchainEventType.LockedInvoiceCreated,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = amount,
+                    UnlockTime = log.UnLockTime,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Creator,
+                    TokenAddress = log.Token,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoiceCreated,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = amount,
-                        UnlockTime = log.UnLockTime,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Creator,
-                        TokenAddress = log.Token,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Creator,
-                            log.Token,
-                            UsdAmount = log.UsdAmount.ToString(),
-                            log.UnLockTime,
-                            LockDuration = log.LockDuration.ToString(),
-                            log.Approver
-                        })
-                    };
+                        log.InvoiceId,
+                        log.Creator,
+                        log.Token,
+                        UsdAmount = log.UsdAmount.ToString(),
+                        log.UnLockTime,
+                        LockDuration = log.LockDuration.ToString(),
+                        log.Approver
+                    })
+                };
 
-                    await _transactionLogRepository.InsertOneAsync(newLog);
-                }
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoiceCreatedAsync(log);
 
@@ -253,42 +252,41 @@ namespace SLT.Services._TransactionLog
                     _logger.LogWarning(
                         "Duplicate LockedInvoicePaid log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
                         log.InvoiceId, log.Hash);
+                    return;
                 }
-                else
+
+                var tokenData = _availableTokenSetting.FirstOrDefault(q =>
+                    !string.IsNullOrWhiteSpace(log.Token) &&
+                    q.Address.ToLower() == log.Token.ToLower() &&
+                    q.Network.ToLower() == log.Network.ToLower());
+
+                var amount = tokenData != null
+                    ? _blockChainService.ConvertFromWei(log.PayAmount, tokenData.PriceDecimalPlaces)
+                    : Web3.Convert.FromWei(log.PayAmount);
+
+                var newLog = new TransactionLog
                 {
-                    var tokenData = _availableTokenSetting.FirstOrDefault(q =>
-                        !string.IsNullOrWhiteSpace(log.Token) &&
-                        q.Address.ToLower() == log.Token.ToLower() &&
-                        q.Network.ToLower() == log.Network.ToLower());
-
-                    var amount = tokenData != null
-                        ? _blockChainService.ConvertFromWei(log.PayAmount, tokenData.PriceDecimalPlaces)
-                        : Web3.Convert.FromWei(log.PayAmount);
-
-                    var newLog = new TransactionLog
+                    EventType = BlockchainEventType.LockedInvoicePaid,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = amount,
+                    UnlockTime = log.LockedUntil,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Payer,
+                    TokenAddress = log.Token,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoicePaid,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = amount,
-                        UnlockTime = log.LockedUntil,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Payer,
-                        TokenAddress = log.Token,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Payer,
-                            log.Token,
-                            PayAmount = log.PayAmount.ToString(),
-                            log.LockedUntil
-                        })
-                    };
+                        log.InvoiceId,
+                        log.Payer,
+                        log.Token,
+                        PayAmount = log.PayAmount.ToString(),
+                        log.LockedUntil
+                    })
+                };
 
-                    await _transactionLogRepository.InsertOneAsync(newLog);
-                }
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoicePaidAsync(log);
 
@@ -332,30 +330,29 @@ namespace SLT.Services._TransactionLog
                     _logger.LogWarning(
                         "Duplicate LockedInvoiceApproved log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
                         log.InvoiceId, log.Hash);
+                    return;
                 }
-                else
-                {
-                    var newLog = new TransactionLog
-                    {
-                        EventType = BlockchainEventType.LockedInvoiceApproved,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = 0,
-                        UnlockTime = null,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Approver,
-                        TokenAddress = log.Address,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Approver
-                        })
-                    };
 
-                    await _transactionLogRepository.InsertOneAsync(newLog);
-                }
+                var newLog = new TransactionLog
+                {
+                    EventType = BlockchainEventType.LockedInvoiceApproved,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = 0,
+                    UnlockTime = null,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Approver,
+                    TokenAddress = log.Address,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
+                    {
+                        log.InvoiceId,
+                        log.Approver
+                    })
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoiceApprovedAsync(log);
 
@@ -402,39 +399,38 @@ namespace SLT.Services._TransactionLog
                     _logger.LogWarning(
                         "Duplicate LockedInvoiceResolved log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
                         log.InvoiceId, log.Hash);
+                    return;
                 }
-                else
+
+                var tokenData = _availableTokenSetting.FirstOrDefault(q =>
+                    q.Network.ToLower() == log.Network.ToLower());
+
+                var amount = tokenData != null
+                    ? _blockChainService.ConvertFromWei(log.Amount, tokenData.PriceDecimalPlaces)
+                    : Web3.Convert.FromWei(log.Amount);
+
+                var newLog = new TransactionLog
                 {
-                    var tokenData = _availableTokenSetting.FirstOrDefault(q =>
-                        q.Network.ToLower() == log.Network.ToLower());
-
-                    var amount = tokenData != null
-                        ? _blockChainService.ConvertFromWei(log.Amount, tokenData.PriceDecimalPlaces)
-                        : Web3.Convert.FromWei(log.Amount);
-
-                    var newLog = new TransactionLog
+                    EventType = BlockchainEventType.LockedInvoiceResolved,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = amount,
+                    UnlockTime = null,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Beneficiary,
+                    TokenAddress = log.Address,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoiceResolved,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = amount,
-                        UnlockTime = null,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Beneficiary,
-                        TokenAddress = log.Address,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Beneficiary,
-                            Amount = log.Amount.ToString(),
-                            FeeAmount = log.FeeAmount.ToString()
-                        })
-                    };
+                        log.InvoiceId,
+                        log.Beneficiary,
+                        Amount = log.Amount.ToString(),
+                        FeeAmount = log.FeeAmount.ToString()
+                    })
+                };
 
-                    await _transactionLogRepository.InsertOneAsync(newLog);
-                }
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoiceResolvedAsync(log);
 

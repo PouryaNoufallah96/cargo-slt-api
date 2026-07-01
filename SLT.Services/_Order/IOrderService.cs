@@ -9,8 +9,6 @@ namespace SLT.Services._Order
 
         Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress,string network);
         Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress,string network);
-        Task<LockedOrderFullResult> CreatePendingLockedQuickOrderAsync(CreateLockedQuickInvoiceUpdate update, string walletAddress, string network);
-        Task<LockedOrderFullResult> CreatePendingLockedMultiStepOrderAsync(CreateLockedMultiStepOrderUpdate update, string walletAddress, string network);
 
 
         Task<OrderListResult> GetOrderListAsync(GetPendingOrderListUpdate update, string walletAddress);

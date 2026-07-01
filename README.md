@@ -37,7 +37,7 @@ honest architecture assessment; **`CODEBASE_MAP.md`** for where things live and 
 
 | Module | Purpose |
 |--------|---------|
-| `_Order` | Create quick/multi-step pending orders + invoices (normal and locked/conditional-payment via separate endpoints); list/detail/report; sync paid and locked invoices; cleanup. |
+| `_Order` | Create quick/multi-step pending orders + invoices (optional `isLocked` for conditional payment); list/detail/report; sync paid and locked invoices; cleanup. |
 | `_User` | Wallet nonce → signature → JWT auth; user fetch + stats. |
 | `_Stake` | Create stake, history/detail, wallet stats, activate from chain events, cleanup. |
 | `_Withdrawal` | Sync stake-withdrawal and profit-withdrawn chain events into the DB. |

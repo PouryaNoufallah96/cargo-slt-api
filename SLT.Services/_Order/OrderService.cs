@@ -62,11 +62,30 @@ namespace SLT.Services._Order
             var tokenData = ValidateToken(update.TokenSymbol);
             if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
 
+            int lockDurationMonths = 0;
+            string approverWallet = null;
+
+            if (update.IsLocked)
+            {
+                lockDurationMonths = ValidateLockDurationMonths(update.LockDurationMonths);
+                approverWallet = ValidateThirdPartyApprover(update.ThirdPartyApprover, walletAddress);
+            }
+            else
+            {
+                ValidateNormalInvoiceHasNoLockFields(update.LockDurationMonths, update.ThirdPartyApprover);
+            }
 
             await _orderRepository.InsertOneAsync(newOrder);
             try
             {
-                var invoiceResult = await CreatePendingQuickInvoiceAsync(newOrder, update.TokenSymbol, update.Description, tokenData);
+                var invoiceResult = await CreatePendingQuickInvoiceAsync(
+                    newOrder,
+                    update.TokenSymbol,
+                    update.Description,
+                    tokenData,
+                    update.IsLocked,
+                    lockDurationMonths,
+                    approverWallet);
                 return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
             }
             catch (Exception ex)
@@ -86,7 +105,15 @@ namespace SLT.Services._Order
         /// <param name="desc"></param>
         /// <param name="dateOnly"></param>
         /// <returns></returns>
-        private async Task<InvoiceResult> CreatePendingQuickInvoiceAsync(Order order, string token, string desc, AvailableTokenData tokenData, DateOnly? dateOnly = null)
+        private async Task<InvoiceResult> CreatePendingQuickInvoiceAsync(
+            Order order,
+            string token,
+            string desc,
+            AvailableTokenData tokenData,
+            bool isLocked = false,
+            int lockDurationMonths = 0,
+            string approverWallet = null,
+            DateOnly? dateOnly = null)
         {
 
 
@@ -109,13 +136,16 @@ namespace SLT.Services._Order
                 State = InvoiceState.NotRegistered,
                 ActivateDate = activeDate,
                 PayMoment = null,
-                Desctiption = desc.Trim(),
+                Desctiption = desc?.Trim(),
                 RegisterHash = null,
                 PaymentHash = null,
                 Errors = null,
                 TokenAmountAtPayment = null,
                 TokenAmountWeiAtPayment = null,
                 TokenPriceAtPayment = null,
+                Lock = isLocked
+                    ? CreateLockDetail(true, lockDurationMonths, approverWallet)
+                    : null
             };
 
             await _invoiceRepository.InsertOneAsync(newInvoice);
@@ -136,10 +166,20 @@ namespace SLT.Services._Order
                 throw new BadRequestException(
                     "Sum of invoice amounts does not match order total amount.");
 
+            string approverWallet = null;
+
+            if (update.IsLocked)
+                approverWallet = ValidateThirdPartyApprover(update.ThirdPartyApprover, walletAddress);
+            else
+                ValidateNormalMultiStepOrderHasNoLockFields(update);
+
             foreach (var invoice in update.Invoices)
             {
                 var tokenData = ValidateToken(invoice.TokenSymbol);
                 if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
+
+                if (update.IsLocked)
+                    ValidateLockDurationMonths(invoice.LockDurationMonths);
             }
 
 
@@ -160,7 +200,11 @@ namespace SLT.Services._Order
             await _orderRepository.InsertOneAsync(newOrder);
             try
             {
-                var invoiceResults = await CreatePendingMultiStepInvoicesAsync(newOrder, update.Invoices, walletAddress);
+                var invoiceResults = await CreatePendingMultiStepInvoicesAsync(
+                    newOrder,
+                    update.Invoices,
+                    update.IsLocked,
+                    approverWallet);
 
                 return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
             }
@@ -184,7 +228,9 @@ namespace SLT.Services._Order
         /// <exception cref="Exception"></exception>
         private async Task<List<InvoiceResult>> CreatePendingMultiStepInvoicesAsync(
         Order order,
-        List<MultiStepInvoiceUpdate> invoiceUpdates, string ownerAddress)
+        List<MultiStepInvoiceUpdate> invoiceUpdates,
+        bool isLocked,
+        string approverWallet)
         {
             if (invoiceUpdates == null || !invoiceUpdates.Any())
                 throw new BadRequestException("Invoice list is empty.");
@@ -225,6 +271,9 @@ namespace SLT.Services._Order
                     TokenAmountAtPayment = null,
                     TokenAmountWeiAtPayment = null,
                     TokenPriceAtPayment = null,
+                    Lock = isLocked
+                        ? CreateLockDetail(true, invoiceUpdate.LockDurationMonths.Value, approverWallet)
+                        : null
                 };
 
                 invoices.Add(invoice);
@@ -233,203 +282,6 @@ namespace SLT.Services._Order
             await _invoiceRepository.InsertManyAsync(invoices);
 
             return invoices.Select(invoice => ConvertToReslut(invoice, OwnershipType.Owner)).ToList();
-        }
-
-        public async Task<LockedOrderFullResult> CreatePendingLockedQuickOrderAsync(CreateLockedQuickInvoiceUpdate update, string walletAddress, string network)
-        {
-            var lockDurationMonths = ValidateLockDurationMonths(update.LockDurationMonths);
-            var approverWallet = ValidateThirdPartyApprover(update.ThirdPartyApprover, walletAddress);
-
-            var newOrder = new Order
-            {
-                OrderId = Guid.NewGuid().ToString("N"),
-                OwnerWallet = walletAddress,
-                PayerWallet = null,
-                SeenBy = [],
-                State = OrderState.NotRegistered,
-                PaymentDay = null,
-                Type = OrderType.Quick,
-                Transportation = null,
-                TotalAmount = update.Amount,
-                TransferId = _randomService.GetSecureAlphaNumericString(12).ToUpper(),
-            };
-
-            var tokenData = ValidateToken(update.TokenSymbol);
-            if (tokenData.Network != network)
-                throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
-
-            await _orderRepository.InsertOneAsync(newOrder);
-            try
-            {
-                var invoiceResult = await CreatePendingLockedQuickInvoiceAsync(
-                    newOrder,
-                    update.TokenSymbol,
-                    update.Description,
-                    tokenData,
-                    lockDurationMonths,
-                    approverWallet);
-                return ConvertToLockedOrderResult(new List<LockedInvoiceCreateResult> { invoiceResult }, newOrder, OwnershipType.Owner);
-            }
-            catch (Exception ex)
-            {
-                SentrySdk.CaptureMessage($"Error creating locked quick invoice for order ex : {ex.Message}");
-                await _orderRepository.DeleteByIdAsync(newOrder.Id);
-                throw new BadRequestException("Please try later!");
-            }
-        }
-
-        public async Task<LockedOrderFullResult> CreatePendingLockedMultiStepOrderAsync(CreateLockedMultiStepOrderUpdate update, string walletAddress, string network)
-        {
-            if (update == null)
-                throw new BadRequestException(nameof(update));
-
-            if (update.Invoices == null || !update.Invoices.Any())
-                throw new BadRequestException("Invoices list cannot be empty.");
-
-            var invoicesTotal = update.Invoices.Sum(i => i.Amount);
-            if (invoicesTotal != update.TotalAmount)
-                throw new BadRequestException("Sum of invoice amounts does not match order total amount.");
-
-            var approverWallet = ValidateThirdPartyApprover(update.ThirdPartyApprover, walletAddress);
-
-            foreach (var invoice in update.Invoices)
-            {
-                var tokenData = ValidateToken(invoice.TokenSymbol);
-                if (tokenData.Network != network)
-                    throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
-
-                ValidateLockDurationMonths(invoice.LockDurationMonths);
-            }
-
-            var newOrder = new Order
-            {
-                OrderId = Guid.NewGuid().ToString("N"),
-                OwnerWallet = walletAddress,
-                PayerWallet = null,
-                SeenBy = [],
-                State = OrderState.NotRegistered,
-                PaymentDay = null,
-                Type = OrderType.Multi,
-                Transportation = update.Transportation.Trim(),
-                TotalAmount = update.TotalAmount,
-                TransferId = _randomService.GetSecureAlphaNumericString(12).ToUpper(),
-            };
-
-            await _orderRepository.InsertOneAsync(newOrder);
-            try
-            {
-                var invoiceResults = await CreatePendingLockedMultiStepInvoicesAsync(newOrder, update.Invoices, approverWallet);
-                return ConvertToLockedOrderResult(invoiceResults, newOrder, OwnershipType.Owner);
-            }
-            catch (Exception ex)
-            {
-                SentrySdk.CaptureMessage($"Error creating locked multi-step invoices for order ex : {ex.Message}");
-                await _orderRepository.DeleteByIdAsync(newOrder.Id);
-                throw new BadRequestException("Please try later!");
-            }
-        }
-
-        private async Task<LockedInvoiceCreateResult> CreatePendingLockedQuickInvoiceAsync(
-            Order order,
-            string token,
-            string desc,
-            AvailableTokenData tokenData,
-            int lockDurationMonths,
-            string approverWallet,
-            DateOnly? dateOnly = null)
-        {
-            var activeDate = dateOnly.HasValue
-                ? dateOnly.Value.ToDateTime(TimeOnly.MinValue)
-                : DateOnly.FromDateTime(DateTime.Now).ToDateTime(TimeOnly.MinValue);
-
-            var newInvoice = new Invoice
-            {
-                InvoiceId = GenerateBytes32HexId(),
-                TokenSymbol = tokenData.Name,
-                TokenNetwork = tokenData.Network,
-                TokenAddress = tokenData.Address,
-                USDTAmount = order.TotalAmount,
-                USDTAmountInWei = _blockChainService.ConvertToWei(order.TotalAmount, 18).ToString(),
-                OwnerWallet = order.OwnerWallet,
-                OrderId = order.OrderId,
-                PayerWallet = null,
-                State = InvoiceState.NotRegistered,
-                ActivateDate = activeDate,
-                PayMoment = null,
-                Desctiption = desc?.Trim(),
-                RegisterHash = null,
-                PaymentHash = null,
-                Errors = null,
-                TokenAmountAtPayment = null,
-                TokenAmountWeiAtPayment = null,
-                TokenPriceAtPayment = null,
-                Lock = new LockDetail
-                {
-                    DurationMonths = lockDurationMonths,
-                    ApproverWallet = approverWallet,
-                    State = LockState.Created
-                }
-            };
-
-            await _invoiceRepository.InsertOneAsync(newInvoice);
-            return ConvertToLockedInvoiceCreateResult(newInvoice, OwnershipType.Owner);
-        }
-
-        private async Task<List<LockedInvoiceCreateResult>> CreatePendingLockedMultiStepInvoicesAsync(
-            Order order,
-            List<LockedMultiStepInvoiceUpdate> invoiceUpdates,
-            string approverWallet)
-        {
-            if (invoiceUpdates == null || !invoiceUpdates.Any())
-                throw new BadRequestException("Invoice list is empty.");
-
-            var invoices = new List<Invoice>();
-
-            foreach (var invoiceUpdate in invoiceUpdates)
-            {
-                var tokenData = ValidateToken(invoiceUpdate.TokenSymbol);
-                var nowPlus1 = DateTime.Now.AddMinutes(1);
-                var timeOnly = TimeOnly.FromDateTime(nowPlus1);
-                var activeDate = invoiceUpdate.ActivationDate.ToDateTime(timeOnly);
-                var lockDurationMonths = ValidateLockDurationMonths(invoiceUpdate.LockDurationMonths);
-
-                var invoice = new Invoice
-                {
-                    InvoiceId = GenerateBytes32HexId(),
-                    TokenSymbol = tokenData.Name,
-                    TokenNetwork = tokenData.Network,
-                    TokenAddress = tokenData.Address,
-                    USDTAmount = invoiceUpdate.Amount,
-                    USDTAmountInWei = _blockChainService.ConvertToWei(invoiceUpdate.Amount, 18).ToString(),
-                    OwnerWallet = order.OwnerWallet,
-                    OrderId = order.OrderId,
-                    PayerWallet = null,
-                    State = InvoiceState.NotRegistered,
-                    ActivateDate = activeDate,
-                    Desctiption = invoiceUpdate.Description?.Trim(),
-                    PayMoment = null,
-                    RegisterHash = null,
-                    PaymentHash = null,
-                    Errors = null,
-                    TokenAmountAtPayment = null,
-                    TokenAmountWeiAtPayment = null,
-                    TokenPriceAtPayment = null,
-                    Lock = new LockDetail
-                {
-                    DurationMonths = lockDurationMonths,
-                    ApproverWallet = approverWallet,
-                    State = LockState.Created
-                }
-                };
-
-                invoices.Add(invoice);
-            }
-
-            await _invoiceRepository.InsertManyAsync(invoices);
-
-            return invoices
-                .Select(invoice => ConvertToLockedInvoiceCreateResult(invoice, OwnershipType.Owner))
-                .ToList();
         }
 
 
@@ -462,6 +314,24 @@ namespace SLT.Services._Order
 
         public async Task ActivateNotRegisteredInvoiceAsync(string invoiceId, string hash)
         {
+            var invoice = await _invoiceRepository.AsQueryable()
+                .Where(q => q.InvoiceId.ToLower() == invoiceId.ToLower())
+                .FirstOrDefaultAsync();
+
+            if (invoice == null)
+                return;
+
+            if (invoice.Lock != null)
+            {
+                _logger.LogError(
+                    "Invoice mode mismatch. Reason: normal event for locked draft, EventType: {EventType}, InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    BlockchainEventType.InvoiceCreated,
+                    invoiceId,
+                    hash);
+                SentrySdk.CaptureMessage($"Invoice mode mismatch: normal event for locked draft, EventType {BlockchainEventType.InvoiceCreated}, InvoiceId {invoiceId}");
+                return;
+            }
+
             var filter = Builders<Invoice>.Filter.And(
                 Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoiceId),
                 Builders<Invoice>.Filter.Eq(x => x.State, InvoiceState.NotRegistered)
@@ -1463,15 +1333,18 @@ namespace SLT.Services._Order
             return order.OrderId;
         }
 
-        private int ValidateLockDurationMonths(int lockDurationMonths)
+        private int ValidateLockDurationMonths(int? lockDurationMonths)
         {
+            if (!lockDurationMonths.HasValue)
+                throw new BadRequestException("Lock duration is required for locked invoices.");
+
             if (!_lockedInvoiceSettings.AllowedLockDurationsMonths
-                .Any(d => d == lockDurationMonths))
+                .Any(d => d == lockDurationMonths.Value))
             {
                 throw new BadRequestException("Lock duration must be one of 1, 3, 6, 12, 18, or 24 months.");
             }
 
-            return lockDurationMonths;
+            return lockDurationMonths.Value;
         }
 
         private string ValidateThirdPartyApprover(string thirdPartyApprover, string ownerWallet)
@@ -1496,6 +1369,38 @@ namespace SLT.Services._Order
                 throw new BadRequestException("Third party approver cannot be the zero address.");
 
             return approverWallet;
+        }
+
+        private static LockDetail CreateLockDetail(bool isLocked, int lockDurationMonths, string approverWallet)
+        {
+            if (!isLocked)
+                return null;
+
+            return new LockDetail
+            {
+                DurationMonths = lockDurationMonths,
+                ApproverWallet = approverWallet,
+                State = LockState.Created
+            };
+        }
+
+        private static string ValidateNormalInvoiceHasNoLockFields(int? lockDurationMonths, string thirdPartyApprover)
+        {
+            if (lockDurationMonths.HasValue || !string.IsNullOrWhiteSpace(thirdPartyApprover))
+                throw new BadRequestException("Lock fields are only valid for locked invoices.");
+
+            return null;
+        }
+
+        private static string ValidateNormalMultiStepOrderHasNoLockFields(CreateMultiStepOrderUpdate update)
+        {
+            if (!string.IsNullOrWhiteSpace(update.ThirdPartyApprover))
+                throw new BadRequestException("Third party approver is only valid for locked orders.");
+
+            if (update.Invoices.Any(i => i.LockDurationMonths.HasValue))
+                throw new BadRequestException("Lock duration is only valid for locked orders.");
+
+            return null;
         }
 
 
@@ -1531,60 +1436,12 @@ namespace SLT.Services._Order
                 RegisterHash = invoice.RegisterHash,
                 PaymentHash = invoice.PaymentHash,
                 ActivateDate = invoice.ActivateDate,
+                IsLocked = invoice.Lock != null,
+                LockDurationMonths = invoice.Lock?.DurationMonths,
+                ApproverWallet = invoice.Lock?.ApproverWallet,
                 OwnershipType = type
             };
 
-        }
-
-        private static LockedInvoiceCreateResult ConvertToLockedInvoiceCreateResult(Invoice invoice, OwnershipType type)
-        {
-            return new LockedInvoiceCreateResult
-            {
-                CreatedMoment = invoice.CreatedMoment,
-                ModifiedMoment = invoice.ModifiedMoment,
-                InvoiceId = invoice.InvoiceId,
-                OwnerWallet = invoice.OwnerWallet,
-                PayerWallet = invoice.PayerWallet,
-                OrderId = invoice.OrderId,
-                TokenSymbol = invoice.TokenSymbol,
-                TokenNetwork = invoice.TokenNetwork,
-                TokenAddress = invoice.TokenAddress,
-                USDTAmount = invoice.USDTAmount,
-                USDTAmountInWei = invoice.USDTAmountInWei,
-                Desctiption = invoice.Desctiption,
-                TokenAmountAtPayment = invoice.TokenAmountAtPayment,
-                TokenAmountWeiAtPayment = invoice.TokenAmountWeiAtPayment,
-                TokenPriceAtPayment = invoice.TokenPriceAtPayment,
-                State = invoice.State,
-                PayMoment = invoice.PayMoment,
-                RegisterHash = invoice.RegisterHash,
-                PaymentHash = invoice.PaymentHash,
-                ActivateDate = invoice.ActivateDate,
-                LockDurationMonths = invoice.Lock.DurationMonths,
-                ApproverWallet = invoice.Lock.ApproverWallet,
-                OwnershipType = type
-            };
-        }
-
-        private LockedOrderFullResult ConvertToLockedOrderResult(List<LockedInvoiceCreateResult> invoiceResults, Order order, OwnershipType type)
-        {
-            return new LockedOrderFullResult
-            {
-                CreatedMoment = order.CreatedMoment,
-                ModifiedMoment = order.ModifiedMoment,
-                OrderId = order.OrderId,
-                TransferId = order.TransferId,
-                OwnerWallet = order.OwnerWallet,
-                PayerWallet = order.PayerWallet,
-                SeenBy = order.SeenBy,
-                State = order.State,
-                PaymentDay = order.PaymentDay,
-                Type = order.Type,
-                Transportation = order.Transportation,
-                TotalAmount = order.TotalAmount,
-                Invoices = invoiceResults,
-                OwnershipType = type
-            };
         }
 
         private LockedInvoiceDetailResult ConvertToLockedInvoiceDetailResult(
@@ -1616,6 +1473,7 @@ namespace SLT.Services._Order
                 RegisterHash = invoice.RegisterHash,
                 PaymentHash = invoice.PaymentHash,
                 ActivateDate = invoice.ActivateDate,
+                IsLocked = true,
                 LockDurationMonths = invoice.Lock.DurationMonths,
                 ApproverWallet = invoice.Lock.ApproverWallet,
                 OwnershipType = type,

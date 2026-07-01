@@ -4,8 +4,6 @@ namespace SLT.Services._Order.DTOs.Results
 {
     public class LockedInvoiceDetailResult : InvoiceResult
     {
-        public int LockDurationMonths { get; set; }
-        public string ApproverWallet { get; set; } = null;
         public LockState LockState { get; set; }
         public DateTime? LockedUntilMoment { get; set; }
         public DateTime? ApprovedMoment { get; set; }
