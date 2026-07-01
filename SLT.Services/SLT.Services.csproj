@@ -11,16 +11,16 @@
   </ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CryptoPrice" Version="0.0.3" />
-		<PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="5.0.0" />
-		<PackageReference Include="Nethereum.RPC.Reactive" Version="5.0.0" />
-		<PackageReference Include="Nethereum.Accounts" Version="5.0.0" />
-		<PackageReference Include="Nethereum.Web3" Version="5.0.0" />
-		<PackageReference Include="Nethereum.Signer" Version="5.0.0" />
-		<PackageReference Include="Nethereum.Contracts" Version="5.0.0" />
-		<PackageReference Include="Microsoft.AspNetCore.SignalR.Core" Version="1.2.0" />
-		<PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
-		<PackageReference Include="System.Reactive" Version="6.0.1" />
+		<PackageReference Include="CryptoPrice" />
+		<PackageReference Include="Nethereum.JsonRpc.WebSocketClient" />
+		<PackageReference Include="Nethereum.RPC.Reactive" />
+		<PackageReference Include="Nethereum.Accounts" />
+		<PackageReference Include="Nethereum.Web3" />
+		<PackageReference Include="Nethereum.Signer" />
+		<PackageReference Include="Nethereum.Contracts" />
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Core" />
+		<PackageReference Include="System.Net.WebSockets" />
+		<PackageReference Include="System.Reactive" />
 	</ItemGroup>
 
 

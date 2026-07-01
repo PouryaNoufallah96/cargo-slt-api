@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS0114;CS0168;CS0169;CS0414;CS0618;CS8632;CS8981;CS9113</NoWarn>
+  </PropertyGroup>
+</Project>

@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.ABI.FunctionEncoding;
 using Nethereum.ABI.Model;
 using Nethereum.Contracts;
@@ -47,6 +48,58 @@ namespace SLT.Services._BlockChain
             _bep20Web3 = new Web3(_account, _settings.RpcUrl2);
             _erc20Web3 = new Web3(_settings.ERC20RpcUrl);
             _bep20Web3.TransactionManager.UseLegacyAsDefault = true;
+        }
+
+        [FunctionOutput]
+        public class GetInvoiceOutputDTO : IFunctionOutputDTO
+        {
+            [Parameter("tuple", "", 1)]
+            public GetInvoiceTupleDTO Invoice { get; set; }
+        }
+
+        public class GetInvoiceTupleDTO
+        {
+            [Parameter("bytes32", "invoiceId", 1)]
+            public byte[] InvoiceId { get; set; }
+
+            [Parameter("address", "creator", 2)]
+            public string Creator { get; set; }
+
+            [Parameter("address", "payer", 3)]
+            public string Payer { get; set; }
+
+            [Parameter("address", "token", 4)]
+            public string Token { get; set; }
+
+            [Parameter("uint256", "usdAmount", 5)]
+            public BigInteger UsdAmount { get; set; }
+
+            [Parameter("uint256", "payAmount", 6)]
+            public BigInteger PayAmount { get; set; }
+
+            [Parameter("uint256", "unlockTime", 7)]
+            public BigInteger UnlockTime { get; set; }
+
+            [Parameter("uint256", "lockDuration", 8)]
+            public BigInteger LockDuration { get; set; }
+
+            [Parameter("address", "approver", 9)]
+            public string Approver { get; set; }
+
+            [Parameter("uint256", "lockedUntil", 10)]
+            public BigInteger LockedUntil { get; set; }
+
+            [Parameter("uint256", "stakedPayout", 11)]
+            public BigInteger StakedPayout { get; set; }
+
+            [Parameter("uint256", "profitClaimed", 12)]
+            public BigInteger ProfitClaimed { get; set; }
+
+            [Parameter("bool", "approved", 13)]
+            public bool Approved { get; set; }
+
+            [Parameter("bool", "settled", 14)]
+            public bool Settled { get; set; }
         }
 
 
@@ -548,6 +601,84 @@ namespace SLT.Services._BlockChain
                     "Unexpected error during previewAccruedProfit.");
 
                 throw new BaseException("An error happened while previewing accrued profit.");
+            }
+        }
+
+        public async Task<LockedInvoiceChainResult> GetLockedInvoiceAsync(string invoiceId, string network)
+        {
+            if (string.IsNullOrWhiteSpace(invoiceId))
+                throw new BadRequestException("Invoice ID is null or empty.");
+
+            if (string.IsNullOrWhiteSpace(network))
+                throw new BadRequestException("Network is null or empty.");
+
+            try
+            {
+                Web3 web3;
+                string contractAddress;
+
+                switch (network.ToUpper())
+                {
+                    case "BEP20":
+                        web3 = _bep20Web3;
+                        contractAddress = _settings.ContractAddress;
+                        break;
+
+                    case "ERC20":
+                        web3 = _erc20Web3;
+                        contractAddress = _settings.ERC20ContractAddress;
+                        break;
+
+                    default:
+                        throw new BadRequestException("Invalid network type.");
+                }
+
+                var contract = web3.Eth.GetContract(ContractAbi, contractAddress);
+                var function = contract.GetFunction("getInvoice");
+                var invoiceIdBytes = HexToByteArray32(invoiceId);
+                var result = await function.CallDeserializingToObjectAsync<GetInvoiceOutputDTO>(invoiceIdBytes);
+
+                if (result?.Invoice == null)
+                    throw new BaseException("Locked invoice was not returned by the contract.");
+
+                return new LockedInvoiceChainResult
+                {
+                    InvoiceId = result.Invoice.InvoiceId?.ToHex(),
+                    Creator = result.Invoice.Creator,
+                    Payer = result.Invoice.Payer,
+                    Token = result.Invoice.Token,
+                    UsdAmount = result.Invoice.UsdAmount,
+                    PayAmount = result.Invoice.PayAmount,
+                    UnlockTime = result.Invoice.UnlockTime,
+                    LockDuration = result.Invoice.LockDuration,
+                    Approver = result.Invoice.Approver,
+                    LockedUntil = result.Invoice.LockedUntil,
+                    StakedPayout = result.Invoice.StakedPayout,
+                    ProfitClaimed = result.Invoice.ProfitClaimed,
+                    Approved = result.Invoice.Approved,
+                    Settled = result.Invoice.Settled
+                };
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert error during getInvoice: {Message}",
+                    revertEx.Message);
+
+                throw new BaseException("Blockchain contract reverted.");
+            }
+            catch (BaseException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error during getInvoice.");
+
+                throw new BaseException("An error happened while reading locked invoice.");
             }
         }
 

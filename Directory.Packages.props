@@ -1,0 +1,33 @@
+<Project>
+  <!--
+    NuGet Central Package Management. Versions live here, NOT on the <PackageReference>
+    items in the .csproj files (a version on a PackageReference under CPM is error NU1008).
+    Auto-imported by every project like Directory.Build.props.
+    Only SLT.Services + SLT.Utilities carry package refs; SLT.Api/SLT.Domain are project-refs only.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Asp.Versioning.Mvc" Version="8.1.0" />
+    <PackageVersion Include="Autofac.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageVersion Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageVersion Include="CryptoPrice" Version="0.0.3" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc" Version="2.1.3" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Core" Version="1.2.0" />
+    <PackageVersion Include="MongoDB.Driver" Version="2.28.0" />
+    <PackageVersion Include="Nethereum.Accounts" Version="5.0.0" />
+    <PackageVersion Include="Nethereum.Contracts" Version="5.0.0" />
+    <PackageVersion Include="Nethereum.JsonRpc.WebSocketClient" Version="5.0.0" />
+    <PackageVersion Include="Nethereum.RPC.Reactive" Version="5.0.0" />
+    <PackageVersion Include="Nethereum.Signer" Version="5.0.0" />
+    <PackageVersion Include="Nethereum.Web3" Version="5.0.0" />
+    <PackageVersion Include="Sentry.AspNetCore" Version="6.0.0" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.Annotations" Version="6.9.0" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.Filters" Version="8.0.2" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.9.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="7.2.0" />
+    <PackageVersion Include="System.Net.WebSockets" Version="4.3.0" />
+    <PackageVersion Include="System.Reactive" Version="6.0.1" />
+  </ItemGroup>
+</Project>

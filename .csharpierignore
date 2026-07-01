@@ -1,0 +1,4 @@
+# Keep csharpier off build output.
+bin/
+obj/
+publish/

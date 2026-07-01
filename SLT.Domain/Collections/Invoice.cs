@@ -29,8 +29,42 @@ namespace SLT.Domain.Collections
         public string PaymentHash { get; set; } = null; 
         [BsonDefaultValue(null)] public string RemoveHash { get; set; } = null;
         public DateTime? ActivateDate { get; set; } = null; //date only
+        public LockDetail Lock { get; set; } = null;
         public List<string> Errors { get; set; } = null;
 
+    }
+
+    public class LockDetail
+    {
+        public int DurationMonths { get; set; }
+        public string ApproverWallet { get; set; } = null;
+        public DateTime? LockedUntilMoment { get; set; } = null;
+        public DateTime? ApprovedMoment { get; set; } = null;
+        public string ApprovedBy { get; set; } = null;
+        public string BeneficiaryWallet { get; set; } = null;
+        public decimal? StakedPayout { get; set; } = null;
+        public string StakedPayoutWei { get; set; } = null;
+        public decimal? FeeAmount { get; set; } = null;
+        public string FeeAmountWei { get; set; } = null;
+        public string ApproveHash { get; set; } = null;
+        public string ResolveHash { get; set; } = null;
+        public LockState State { get; set; } = LockState.Created;
+
+        public decimal? LivePayoutPreview { get; set; } = null;
+        public string LivePayoutPreviewWei { get; set; } = null;
+        public decimal? ProfitClaimed { get; set; } = null;
+        public string ProfitClaimedWei { get; set; } = null;
+        public bool? Approved { get; set; } = null;
+        public bool? Settled { get; set; } = null;
+    }
+
+    public enum LockState
+    {
+        Created,
+        Funded,
+        Approved,
+        Released,
+        Refunded
     }
 
 
@@ -42,7 +76,9 @@ namespace SLT.Domain.Collections
         Failed,
         Expired,
         Cancelled,
-        NotRegistered
+        NotRegistered,
+        Locked,
+        Refunded
     }
 
 }
