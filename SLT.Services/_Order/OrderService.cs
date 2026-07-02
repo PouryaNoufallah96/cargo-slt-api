@@ -592,28 +592,50 @@ namespace SLT.Services._Order
             }
 
             var tokenData = ValidateToken(invoice.TokenSymbol);
+            var payMoment = DateTime.UtcNow;
+            var tokenAmount = _blockChainService.ConvertFromWei(log.PayAmount, tokenData.PriceDecimalPlaces);
+            var tokenAmountWei = log.PayAmount.ToString();
 
-            invoice.PayerWallet = log.Payer;
-            invoice.PaymentHash = log.Hash;
-            invoice.PayMoment = DateTime.UtcNow;
-            invoice.TokenAmountAtPayment = _blockChainService.ConvertFromWei(log.PayAmount, tokenData.PriceDecimalPlaces);
-            invoice.TokenAmountWeiAtPayment = log.PayAmount.ToString();
-            invoice.Lock.LockedUntilMoment = log.LockedUntil;
+            var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
 
-            if (invoice.Lock.State < LockState.Funded)
-                invoice.Lock.State = LockState.Funded;
+            var update = Builders<Invoice>.Update
+                .Set(x => x.PayerWallet, log.Payer)
+                .Set(x => x.PaymentHash, log.Hash)
+                .Set(x => x.PayMoment, payMoment)
+                .Set(x => x.TokenAmountAtPayment, tokenAmount)
+                .Set(x => x.TokenAmountWeiAtPayment, tokenAmountWei)
+                .Set(x => x.Lock.LockedUntilMoment, log.LockedUntil)
+                .Max(x => x.Lock.State, LockState.Funded);
 
-            await _invoiceRepository.ReplaceOneAsync(invoice);
+            var options = new FindOneAndUpdateOptions<Invoice>
+            {
+                ReturnDocument = ReturnDocument.After
+            };
+
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+
+            if (updatedInvoice == null)
+            {
+                return new LockedInvoiceSyncResult
+                {
+                    Changed = false,
+                    InvoiceId = invoice.InvoiceId,
+                    OrderId = invoice.OrderId,
+                    OwnerWallet = invoice.OwnerWallet,
+                    LockState = invoice.Lock.State,
+                    InvoiceState = invoice.State
+                };
+            }
 
             return new LockedInvoiceSyncResult
             {
                 Changed = true,
-                InvoiceId = invoice.InvoiceId,
-                OrderId = invoice.OrderId,
-                OwnerWallet = invoice.OwnerWallet,
-                PayerWallet = invoice.PayerWallet,
+                InvoiceId = updatedInvoice.InvoiceId,
+                OrderId = updatedInvoice.OrderId,
+                OwnerWallet = updatedInvoice.OwnerWallet,
+                PayerWallet = updatedInvoice.PayerWallet,
                 LockState = LockState.Funded,
-                InvoiceState = invoice.State
+                InvoiceState = updatedInvoice.State
             };
         }
 
@@ -668,25 +690,47 @@ namespace SLT.Services._Order
                 };
             }
 
-            invoice.Lock.ApprovedBy = log.Approver;
-            invoice.Lock.ApprovedMoment = DateTime.UtcNow;
-            invoice.Lock.ApproveHash = log.Hash;
+            var approvedMoment = DateTime.UtcNow;
 
-            if (invoice.Lock.State < LockState.Approved)
-                invoice.Lock.State = LockState.Approved;
+            var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
 
-            await _invoiceRepository.ReplaceOneAsync(invoice);
+            var update = Builders<Invoice>.Update
+                .Set(x => x.Lock.ApprovedBy, log.Approver)
+                .Set(x => x.Lock.ApprovedMoment, approvedMoment)
+                .Set(x => x.Lock.ApproveHash, log.Hash)
+                .Max(x => x.Lock.State, LockState.Approved);
+
+            var options = new FindOneAndUpdateOptions<Invoice>
+            {
+                ReturnDocument = ReturnDocument.After
+            };
+
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+
+            if (updatedInvoice == null)
+            {
+                return new LockedInvoiceSyncResult
+                {
+                    Changed = false,
+                    InvoiceId = invoice.InvoiceId,
+                    OrderId = invoice.OrderId,
+                    OwnerWallet = invoice.OwnerWallet,
+                    ApproverWallet = invoice.Lock.ApprovedBy,
+                    LockState = invoice.Lock.State,
+                    InvoiceState = invoice.State
+                };
+            }
 
             return new LockedInvoiceSyncResult
             {
                 Changed = true,
-                InvoiceId = invoice.InvoiceId,
-                OrderId = invoice.OrderId,
-                OwnerWallet = invoice.OwnerWallet,
-                PayerWallet = invoice.PayerWallet,
-                ApproverWallet = invoice.Lock.ApprovedBy,
+                InvoiceId = updatedInvoice.InvoiceId,
+                OrderId = updatedInvoice.OrderId,
+                OwnerWallet = updatedInvoice.OwnerWallet,
+                PayerWallet = updatedInvoice.PayerWallet,
+                ApproverWallet = updatedInvoice.Lock.ApprovedBy,
                 LockState = LockState.Approved,
-                InvoiceState = invoice.State
+                InvoiceState = updatedInvoice.State
             };
         }
 
@@ -759,21 +803,46 @@ namespace SLT.Services._Order
             var tokenData = ValidateToken(invoice.TokenSymbol);
             var targetLockState = released ? LockState.Released : LockState.Refunded;
             var targetInvoiceState = released ? InvoiceState.Completed : InvoiceState.Refunded;
+            var stakedPayout = _blockChainService.ConvertFromWei(log.Amount, tokenData.PriceDecimalPlaces);
+            var feeAmount = _blockChainService.ConvertFromWei(log.FeeAmount, tokenData.PriceDecimalPlaces);
 
-            invoice.State = targetInvoiceState;
-            invoice.Lock.BeneficiaryWallet = log.Beneficiary;
-            invoice.Lock.StakedPayout = _blockChainService.ConvertFromWei(log.Amount, tokenData.PriceDecimalPlaces);
-            invoice.Lock.StakedPayoutWei = log.Amount.ToString();
-            invoice.Lock.FeeAmount = _blockChainService.ConvertFromWei(log.FeeAmount, tokenData.PriceDecimalPlaces);
-            invoice.Lock.FeeAmountWei = log.FeeAmount.ToString();
-            invoice.Lock.ResolveHash = log.Hash;
-            invoice.Lock.State = targetLockState;
+            var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
 
-            await _invoiceRepository.ReplaceOneAsync(invoice);
+            var update = Builders<Invoice>.Update
+                .Set(x => x.State, targetInvoiceState)
+                .Set(x => x.Lock.BeneficiaryWallet, log.Beneficiary)
+                .Set(x => x.Lock.StakedPayout, stakedPayout)
+                .Set(x => x.Lock.StakedPayoutWei, log.Amount.ToString())
+                .Set(x => x.Lock.FeeAmount, feeAmount)
+                .Set(x => x.Lock.FeeAmountWei, log.FeeAmount.ToString())
+                .Set(x => x.Lock.ResolveHash, log.Hash)
+                .Set(x => x.Lock.State, targetLockState);
+
+            var options = new FindOneAndUpdateOptions<Invoice>
+            {
+                ReturnDocument = ReturnDocument.After
+            };
+
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+
+            if (updatedInvoice == null)
+            {
+                return new LockedInvoiceSyncResult
+                {
+                    Changed = false,
+                    InvoiceId = invoice.InvoiceId,
+                    OrderId = invoice.OrderId,
+                    OwnerWallet = invoice.OwnerWallet,
+                    PayerWallet = invoice.PayerWallet,
+                    BeneficiaryWallet = log.Beneficiary,
+                    LockState = invoice.Lock.State,
+                    InvoiceState = invoice.State
+                };
+            }
 
             try
             {
-                await SyncLockedOrderWithOrderIdAsync(invoice.OrderId);
+                await SyncLockedOrderWithOrderIdAsync(updatedInvoice.OrderId);
             }
             catch (Exception e)
             {
@@ -783,10 +852,10 @@ namespace SLT.Services._Order
             return new LockedInvoiceSyncResult
             {
                 Changed = true,
-                InvoiceId = invoice.InvoiceId,
-                OrderId = invoice.OrderId,
-                OwnerWallet = invoice.OwnerWallet,
-                PayerWallet = invoice.PayerWallet,
+                InvoiceId = updatedInvoice.InvoiceId,
+                OrderId = updatedInvoice.OrderId,
+                OwnerWallet = updatedInvoice.OwnerWallet,
+                PayerWallet = updatedInvoice.PayerWallet,
                 BeneficiaryWallet = log.Beneficiary,
                 LockState = targetLockState,
                 InvoiceState = targetInvoiceState
