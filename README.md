@@ -37,13 +37,13 @@ honest architecture assessment; **`CODEBASE_MAP.md`** for where things live and 
 
 | Module | Purpose |
 |--------|---------|
-| `_Order` | Create quick/multi-step pending orders + invoices; list/detail/report; sync paid invoices; cleanup. |
+| `_Order` | Create quick/multi-step pending orders + invoices (optional `isLocked` for conditional payment); list/detail/report; sync paid and locked invoices; cleanup. |
 | `_User` | Wallet nonce → signature → JWT auth; user fetch + stats. |
 | `_Stake` | Create stake, history/detail, wallet stats, activate from chain events, cleanup. |
 | `_Withdrawal` | Sync stake-withdrawal and profit-withdrawn chain events into the DB. |
 | `_Price` | Fetch token prices; feed `PriceHub` + cached `PriceStorage`. |
 | `_BlockChain` | EVM read/write via Nethereum (balances, on-chain invoice ops, stake profit preview), `_MultiCallService`, `_BlockChainWebSocket` listeners. |
-| `_TransactionLog` | Persist invoice/deposit/profit/withdraw chain logs; track last-checked block per network; feed `WalletNotifyHub`. |
+| `_TransactionLog` | Persist invoice/deposit/profit/withdraw chain logs (including locked-invoice events); track last-checked block per network; feed `WalletNotifyHub`. |
 | `_Log` | Capture app + request logs; hard-delete cleanup (`RealDeleteManyAsync`). |
 
 ## Build, run, deploy

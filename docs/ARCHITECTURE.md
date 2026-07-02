@@ -78,8 +78,13 @@ log cleanup). `MonjoConnection` is a singleton `MongoClient` + `IMongoDatabase` 
 `BlockChainService` holds two `Web3` clients: `_bep20Web3` (with a signing hot-wallet account for
 writes) and `_erc20Web3` (reads). Contract ABIs (forward-sale invoice, ERC20, stake) are embedded.
 `_MultiCallService` batches `eth_call`s; `_BlockChainWebSocket` listeners (BackgroundService) sync
-on-chain events into `_TransactionLog` / `_Withdrawal` / `_Order`. Login signature recovery uses
-`Nethereum.Signer.EthereumMessageSigner` + `Nethereum.Util.AddressUtil`.
+on-chain events into `_TransactionLog` / `_Withdrawal` / `_Order`. Normal invoice events
+(`InvoiceCreated`, `InvoicePaid`) use the existing txlog → order sync path; **locked invoice**
+events (`LockedInvoiceCreated`, `LockedInvoicePaid`, `LockedInvoiceApproved`,
+`LockedInvoiceResolved`) use additive handlers only — normal handlers are unchanged. Locked detail
+can read live contract state via `GetLockedInvoiceAsync` until the invoice reaches a terminal lock
+state. Login signature recovery uses `Nethereum.Signer.EthereumMessageSigner` +
+`Nethereum.Util.AddressUtil`.
 
 ## DI
 

@@ -1,12 +1,12 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Nethereum.Web3;
 using SLT.Domain.Collections;
 using SLT.Domain.Repositories.Contracts;
 using SLT.Services._BlockChain;
 using SLT.Services._Order;
+using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Price.DTOs.Settings;
 using SLT.Services._Stake;
 using SLT.Services._TransactionLog._Hub;
@@ -25,7 +25,6 @@ namespace SLT.Services._TransactionLog
         IOrderService _orderService,
         IBlockChainService _blockChainService,
         AvailableTokensSettings _availableTokenSetting,
-        IInvoiceRepository _invoiceRepository,
         ILogger<TransactionLogService> _logger) : ITransactionLogService, IScopedDependency
     {
 
@@ -76,8 +75,7 @@ namespace SLT.Services._TransactionLog
 
                 };
 
-                if (!await TryInsertTransactionLogAsync(newLog))
-                    return;
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 await _orderService.ActivateNotRegisteredInvoiceAsync(invoiceId, txHash);
 
@@ -137,8 +135,7 @@ namespace SLT.Services._TransactionLog
                     Network = log.Network
                 };
 
-                if (!await TryInsertTransactionLogAsync(newLog))
-                    return;
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var txHash = log.Hash;
                 var ownerWallet = await _orderService.SyncPaidInvoiceAsync(log.InvoiceId, log.Payer, txHash);
@@ -168,40 +165,74 @@ namespace SLT.Services._TransactionLog
         {
             try
             {
-                var amount = await ConvertLockedTokenAmountAsync(log.InvoiceId, log.Token, log.Network, log.UsdAmount);
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == log.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == log.InvoiceId.ToLower() &&
+                        q.EventType == BlockchainEventType.LockedInvoiceCreated)
+                    .FirstOrDefaultAsync();
 
-                await CreateLockedInvoiceLogAsync(
-                    new TransactionLog
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate LockedInvoiceCreated log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
+                        log.InvoiceId, log.Hash);
+                    return;
+                }
+
+                var tokenData = _availableTokenSetting.FirstOrDefault(q =>
+                    !string.IsNullOrWhiteSpace(log.Token) &&
+                    q.Address.ToLower() == log.Token.ToLower() &&
+                    q.Network.ToLower() == log.Network.ToLower());
+
+                var amount = tokenData != null
+                    ? _blockChainService.ConvertFromWei(log.UsdAmount, tokenData.PriceDecimalPlaces)
+                    : Web3.Convert.FromWei(log.UsdAmount);
+
+                var newLog = new TransactionLog
+                {
+                    EventType = BlockchainEventType.LockedInvoiceCreated,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = amount,
+                    UnlockTime = log.UnLockTime,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Creator,
+                    TokenAddress = log.Token,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoiceCreated,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = amount,
-                        UnlockTime = log.UnLockTime,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Creator,
-                        TokenAddress = log.Token,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Creator,
-                            log.Token,
-                            UsdAmount = log.UsdAmount.ToString(),
-                            log.UnLockTime,
-                            LockDuration = log.LockDuration.ToString(),
-                            log.Approver
-                        })
-                    });
+                        log.InvoiceId,
+                        log.Creator,
+                        log.Token,
+                        UsdAmount = log.UsdAmount.ToString(),
+                        log.UnLockTime,
+                        LockDuration = log.LockDuration.ToString(),
+                        log.Approver
+                    })
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoiceCreatedAsync(log);
-                await NotifyLockedInvoiceTransitionAsync(syncResult, "created");
+
+                if (syncResult != null && syncResult.Changed)
+                {
+                    try
+                    {
+                        var shortInvoiceId = log.InvoiceId.Length > 10 ? log.InvoiceId[..10] : log.InvoiceId;
+                        await _hubContext.Clients.Group(log.Creator).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} created.");
+                    }
+                    catch (Exception)
+                    {
+                        _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId} to wallet {Wallet}.", log.InvoiceId, log.Creator);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating LockedInvoiceCreated transaction log.");
-                throw;
             }
         }
 
@@ -209,38 +240,77 @@ namespace SLT.Services._TransactionLog
         {
             try
             {
-                var amount = await ConvertLockedTokenAmountAsync(log.InvoiceId, log.Token, log.Network, log.PayAmount);
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == log.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == log.InvoiceId.ToLower() &&
+                        q.EventType == BlockchainEventType.LockedInvoicePaid)
+                    .FirstOrDefaultAsync();
 
-                await CreateLockedInvoiceLogAsync(
-                    new TransactionLog
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate LockedInvoicePaid log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
+                        log.InvoiceId, log.Hash);
+                    return;
+                }
+
+                var tokenData = _availableTokenSetting.FirstOrDefault(q =>
+                    !string.IsNullOrWhiteSpace(log.Token) &&
+                    q.Address.ToLower() == log.Token.ToLower() &&
+                    q.Network.ToLower() == log.Network.ToLower());
+
+                var amount = tokenData != null
+                    ? _blockChainService.ConvertFromWei(log.PayAmount, tokenData.PriceDecimalPlaces)
+                    : Web3.Convert.FromWei(log.PayAmount);
+
+                var newLog = new TransactionLog
+                {
+                    EventType = BlockchainEventType.LockedInvoicePaid,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = amount,
+                    UnlockTime = log.LockedUntil,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Payer,
+                    TokenAddress = log.Token,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoicePaid,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = amount,
-                        UnlockTime = log.LockedUntil,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Payer,
-                        TokenAddress = log.Token,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Payer,
-                            log.Token,
-                            PayAmount = log.PayAmount.ToString(),
-                            log.LockedUntil
-                        })
-                    });
+                        log.InvoiceId,
+                        log.Payer,
+                        log.Token,
+                        PayAmount = log.PayAmount.ToString(),
+                        log.LockedUntil
+                    })
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoicePaidAsync(log);
-                await NotifyLockedInvoiceTransitionAsync(syncResult, "funded");
+
+                if (syncResult != null && syncResult.Changed)
+                {
+                    try
+                    {
+                        var shortInvoiceId = log.InvoiceId.Length > 10 ? log.InvoiceId[..10] : log.InvoiceId;
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.OwnerWallet))
+                            await _hubContext.Clients.Group(syncResult.OwnerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} funded.");
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.PayerWallet))
+                            await _hubContext.Clients.Group(syncResult.PayerWallet).SendAsync("PaymentMessage", $"You funded locked invoice {shortInvoiceId}.");
+                    }
+                    catch (Exception)
+                    {
+                        _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId}.", log.InvoiceId);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating LockedInvoicePaid transaction log.");
-                throw;
             }
         }
 
@@ -248,33 +318,68 @@ namespace SLT.Services._TransactionLog
         {
             try
             {
-                await CreateLockedInvoiceLogAsync(
-                    new TransactionLog
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == log.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == log.InvoiceId.ToLower() &&
+                        q.EventType == BlockchainEventType.LockedInvoiceApproved)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate LockedInvoiceApproved log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
+                        log.InvoiceId, log.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    EventType = BlockchainEventType.LockedInvoiceApproved,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = 0,
+                    UnlockTime = null,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Approver,
+                    TokenAddress = log.Address,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoiceApproved,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = 0,
-                        UnlockTime = null,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Approver,
-                        TokenAddress = log.Address,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Approver
-                        })
-                    });
+                        log.InvoiceId,
+                        log.Approver
+                    })
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoiceApprovedAsync(log);
-                await NotifyLockedInvoiceTransitionAsync(syncResult, "approved");
+
+                if (syncResult != null && syncResult.Changed)
+                {
+                    try
+                    {
+                        var shortInvoiceId = log.InvoiceId.Length > 10 ? log.InvoiceId[..10] : log.InvoiceId;
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.OwnerWallet))
+                            await _hubContext.Clients.Group(syncResult.OwnerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} approved.");
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.PayerWallet))
+                            await _hubContext.Clients.Group(syncResult.PayerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} approved.");
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.ApproverWallet))
+                            await _hubContext.Clients.Group(syncResult.ApproverWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} approved.");
+                    }
+                    catch (Exception)
+                    {
+                        _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId}.", log.InvoiceId);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating LockedInvoiceApproved transaction log.");
-                throw;
             }
         }
 
@@ -282,158 +387,79 @@ namespace SLT.Services._TransactionLog
         {
             try
             {
-                var amount = await ConvertLockedTokenAmountAsync(log.InvoiceId, null, log.Network, log.Amount);
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == log.Hash.ToLower() &&
+                        q.InvoiceId.ToLower() == log.InvoiceId.ToLower() &&
+                        q.EventType == BlockchainEventType.LockedInvoiceResolved)
+                    .FirstOrDefaultAsync();
 
-                await CreateLockedInvoiceLogAsync(
-                    new TransactionLog
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate LockedInvoiceResolved log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
+                        log.InvoiceId, log.Hash);
+                    return;
+                }
+
+                var tokenData = _availableTokenSetting.FirstOrDefault(q =>
+                    q.Network.ToLower() == log.Network.ToLower());
+
+                var amount = tokenData != null
+                    ? _blockChainService.ConvertFromWei(log.Amount, tokenData.PriceDecimalPlaces)
+                    : Web3.Convert.FromWei(log.Amount);
+
+                var newLog = new TransactionLog
+                {
+                    EventType = BlockchainEventType.LockedInvoiceResolved,
+                    InvoiceId = log.InvoiceId,
+                    BlockNumber = (decimal)log.BlockNumber,
+                    Hash = log.Hash,
+                    Amount = amount,
+                    UnlockTime = null,
+                    Status = TransactionStatus.Confirmed,
+                    Wallet = log.Beneficiary,
+                    TokenAddress = log.Address,
+                    Network = log.Network,
+                    Data = JsonSerializer.Serialize(new
                     {
-                        EventType = BlockchainEventType.LockedInvoiceResolved,
-                        InvoiceId = log.InvoiceId,
-                        BlockNumber = (decimal)log.BlockNumber,
-                        Hash = log.Hash,
-                        Amount = amount,
-                        UnlockTime = null,
-                        Status = TransactionStatus.Confirmed,
-                        Wallet = log.Beneficiary,
-                        TokenAddress = log.Address,
-                        Network = log.Network,
-                        Data = JsonSerializer.Serialize(new
-                        {
-                            log.InvoiceId,
-                            log.Beneficiary,
-                            Amount = log.Amount.ToString(),
-                            FeeAmount = log.FeeAmount.ToString()
-                        })
-                    });
+                        log.InvoiceId,
+                        log.Beneficiary,
+                        Amount = log.Amount.ToString(),
+                        FeeAmount = log.FeeAmount.ToString()
+                    })
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
 
                 var syncResult = await _orderService.SyncLockedInvoiceResolvedAsync(log);
-                await NotifyLockedInvoiceTransitionAsync(syncResult, syncResult.LockState == LockState.Refunded ? "refunded" : "released");
+
+                if (syncResult != null && syncResult.Changed)
+                {
+                    try
+                    {
+                        var shortInvoiceId = log.InvoiceId.Length > 10 ? log.InvoiceId[..10] : log.InvoiceId;
+                        var transition = syncResult.LockState == LockState.Refunded ? "refunded" : "released";
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.OwnerWallet))
+                            await _hubContext.Clients.Group(syncResult.OwnerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.PayerWallet))
+                            await _hubContext.Clients.Group(syncResult.PayerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
+
+                        if (!string.IsNullOrWhiteSpace(syncResult.BeneficiaryWallet))
+                            await _hubContext.Clients.Group(syncResult.BeneficiaryWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
+                    }
+                    catch (Exception)
+                    {
+                        _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId}.", log.InvoiceId);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating LockedInvoiceResolved transaction log.");
-                throw;
             }
-        }
-
-        private async Task<bool> CreateLockedInvoiceLogAsync(TransactionLog transactionLog)
-        {
-            return await TryInsertTransactionLogAsync(transactionLog);
-        }
-
-        private async Task<bool> TryInsertTransactionLogAsync(TransactionLog transactionLog)
-        {
-            var existsLog = await _transactionLogRepository.AsQueryable()
-                .Where(q =>
-                    q.Hash.ToLower() == transactionLog.Hash.ToLower() &&
-                    q.InvoiceId.ToLower() == transactionLog.InvoiceId.ToLower() &&
-                    q.EventType == transactionLog.EventType)
-                .FirstOrDefaultAsync();
-
-            if (existsLog != null)
-            {
-                LogDuplicateTransactionLog(transactionLog);
-                return false;
-            }
-
-            try
-            {
-                await _transactionLogRepository.InsertOneAsync(transactionLog);
-                return true;
-            }
-            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
-            {
-                LogDuplicateTransactionLog(transactionLog);
-                return false;
-            }
-        }
-
-        private void LogDuplicateTransactionLog(TransactionLog transactionLog)
-        {
-            _logger.LogWarning(
-                "Duplicate {EventType} log detected for InvoiceId {InvoiceId}. Skipping insertion. Hash: {Hash}",
-                transactionLog.EventType, transactionLog.InvoiceId, transactionLog.Hash);
-        }
-
-        private async Task<decimal> ConvertLockedTokenAmountAsync(string invoiceId, string tokenAddress, string network, BigInteger amount)
-        {
-            var tokenData = _availableTokenSetting.FirstOrDefault(q =>
-                AddressEquals(q.Address, tokenAddress) &&
-                string.Equals(q.Network, network, StringComparison.OrdinalIgnoreCase));
-
-            if (tokenData == null && !string.IsNullOrWhiteSpace(invoiceId))
-            {
-                var invoice = await _invoiceRepository.AsQueryable()
-                    .Where(q => q.InvoiceId.ToLower() == invoiceId.ToLower())
-                    .FirstOrDefaultAsync();
-
-                if (invoice != null)
-                {
-                    tokenData = _availableTokenSetting.FirstOrDefault(q =>
-                        string.Equals(q.Name, invoice.TokenSymbol, StringComparison.OrdinalIgnoreCase));
-                }
-            }
-
-            if (tokenData == null)
-            {
-                _logger.LogWarning(
-                    "Could not resolve token decimals for locked invoice amount. InvoiceId: {InvoiceId}, TokenAddress: {TokenAddress}, Network: {Network}",
-                    invoiceId,
-                    tokenAddress,
-                    network);
-                return Web3.Convert.FromWei(amount);
-            }
-
-            return _blockChainService.ConvertFromWei(amount, tokenData.PriceDecimalPlaces);
-        }
-
-        private async Task NotifyLockedInvoiceTransitionAsync(LockedInvoiceSyncResult syncResult, string transition)
-        {
-            if (syncResult == null || !syncResult.Changed)
-                return;
-
-            SentrySdk.AddBreadcrumb(
-                $"Locked invoice {transition} synced. InvoiceId: {syncResult.InvoiceId}",
-                "locked-invoice");
-
-            var wallets = new[]
-                {
-                    syncResult.OwnerWallet,
-                    syncResult.PayerWallet,
-                    syncResult.ApproverWallet,
-                    syncResult.BeneficiaryWallet
-                }
-                .Where(q => !string.IsNullOrWhiteSpace(q))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            if (!wallets.Any())
-                return;
-
-            var shortInvoiceId = !string.IsNullOrEmpty(syncResult.InvoiceId) && syncResult.InvoiceId.Length > 10
-                ? syncResult.InvoiceId[..10]
-                : syncResult.InvoiceId;
-
-            try
-            {
-                foreach (var wallet in wallets)
-                {
-                    await _hubContext.Clients.Group(wallet)
-                        .SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send locked invoice notification. InvoiceId: {InvoiceId}", syncResult.InvoiceId);
-            }
-        }
-
-        private static bool AddressEquals(string left, string right)
-        {
-            if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
-                return false;
-
-            return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
 
@@ -442,6 +468,22 @@ namespace SLT.Services._TransactionLog
         /// </summary>
         /// <returns></returns>
         public async Task<BigInteger> GetInvoiceLastCheckedBlockNumberAsync(string network)
+        {
+            var lastBlock = await _transactionLogRepository
+             .AsQueryable()
+             .Where(q => q.Network == network)
+             .Where(h => h.EventType == BlockchainEventType.InvoiceCreated)
+             .OrderByDescending(b => b)
+             .FirstOrDefaultAsync();
+            if (lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
+
+            return new BigInteger(lastBlock.BlockNumber);
+        }
+
+        public async Task<BigInteger> GetCombinedInvoiceEventLastCheckedBlockNumberAsync(string network)
         {
             var invoiceEventTypes = new[]
             {
@@ -454,15 +496,14 @@ namespace SLT.Services._TransactionLog
             };
 
             var lastBlock = await _transactionLogRepository
-             .AsQueryable()
-             .Where(q => q.Network == network)
-             .Where(h => invoiceEventTypes.Contains(h.EventType))
-             .OrderByDescending(b => b.BlockNumber)
-             .FirstOrDefaultAsync();
+                .AsQueryable()
+                .Where(q => q.Network == network)
+                .Where(h => invoiceEventTypes.Contains(h.EventType))
+                .OrderByDescending(b => b.BlockNumber)
+                .FirstOrDefaultAsync();
+
             if (lastBlock == null)
-            {
                 return BigInteger.Zero;
-            }
 
             var overlapBlocks = new BigInteger(10);
             var fromBlock = new BigInteger(lastBlock.BlockNumber) - overlapBlocks;
@@ -506,9 +547,7 @@ namespace SLT.Services._TransactionLog
                     Data = SerializeData(input)
                 };
 
-                if (!await TryInsertTransactionLogAsync(newLog))
-                    return;
-
+                await _transactionLogRepository.InsertOneAsync(newLog);
                 await _stakeService.ActivateStakeAsync(input.DepositId, input.Hash);
             }
             catch (Exception ex)
@@ -592,9 +631,7 @@ namespace SLT.Services._TransactionLog
                     Data = SerializeData(input)
                 };
 
-                if (!await TryInsertTransactionLogAsync(newLog))
-                    return;
-
+                await _transactionLogRepository.InsertOneAsync(newLog);
                 await _withdrawalService.CreateProfitWithdrawaByEventAsycn(input.DepositId, input.Profit, input.Hash);
             }
             catch (Exception ex)
@@ -636,9 +673,7 @@ namespace SLT.Services._TransactionLog
                     Data = SerializeData(input)
                 };
 
-                if (!await TryInsertTransactionLogAsync(newLog))
-                    return;
-
+                await _transactionLogRepository.InsertOneAsync(newLog);
                 await _withdrawalService.CreateWithdrawnAllByEventAsync(input.DepositId, input.Hash, input.Principal, input.Profit);
             }
             catch (Exception ex)
@@ -715,7 +750,7 @@ namespace SLT.Services._TransactionLog
             });
         }
 
-        private T DeserializeData<T>(string data)
+        private T? DeserializeData<T>(string data)
         {
             if (string.IsNullOrWhiteSpace(data))
                 return default;

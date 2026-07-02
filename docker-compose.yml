@@ -62,6 +62,14 @@ services:
       - BlockchainWebSocketSetting__ConnectionTimeout=$blockchainwebsocketsetting_connection_timeout
       - BlockchainWebSocketSetting__SubscriptionTimeout=$blockchainwebsocketsetting_subscription_timeout
 
+      # Locked Invoice
+      - LockedInvoiceSettings__AllowedLockDurationsMonths__0=$lockedinvoicesettings_allowed_lock_durations_months_0
+      - LockedInvoiceSettings__AllowedLockDurationsMonths__1=$lockedinvoicesettings_allowed_lock_durations_months_1
+      - LockedInvoiceSettings__AllowedLockDurationsMonths__2=$lockedinvoicesettings_allowed_lock_durations_months_2
+      - LockedInvoiceSettings__AllowedLockDurationsMonths__3=$lockedinvoicesettings_allowed_lock_durations_months_3
+      - LockedInvoiceSettings__AllowedLockDurationsMonths__4=$lockedinvoicesettings_allowed_lock_durations_months_4
+      - LockedInvoiceSettings__AllowedLockDurationsMonths__5=$lockedinvoicesettings_allowed_lock_durations_months_5
+
       # Application Pool Settings -> Applications[0]
       - ApplicationPoolSettings__Applications__0__ApplicationId=$applicationpoolsettings_applications_0_application_id
       - ApplicationPoolSettings__Applications__0__PreSharedKey=$applicationpoolsettings_applications_0_pre_shared_key

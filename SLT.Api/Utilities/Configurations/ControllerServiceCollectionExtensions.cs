@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using SLT.Services._BlockChain._BlockChainWebSocket.DTOs;
 using SLT.Services._BlockChain.DTOs.Settings;
+using SLT.Services._Order.DTOs.Settings;
 using SLT.Services._Price.DTOs.Settings;
 using SLT.Services._Stake.DTOs.Settings;
 
@@ -17,6 +18,7 @@ namespace SLT.Api.Utilities.Configurations
             services.RegisterSetting<BlockChainSettings>(configuration.GetSection(nameof(BlockChainSettings)));
             services.RegisterSetting<CallPriceSettings>(configuration.GetSection(nameof(CallPriceSettings)));
             services.RegisterSetting<StakeSetting>(configuration.GetSection(nameof(StakeSetting)));
+            services.RegisterSetting<LockedInvoiceSettings>(configuration.GetSection(nameof(LockedInvoiceSettings)));
         }
 
         private static void RegisterSetting<TSettings>(this IServiceCollection services, IConfigurationSection configuration)
