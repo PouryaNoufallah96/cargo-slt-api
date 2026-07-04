@@ -37,7 +37,7 @@ Optional fields on **existing** create DTOs; existing invoice detail returns opt
 |-------|----------|
 | Create | `CreatePendingQuickOrderAsync` / `CreatePendingMultiStepOrderAsync` — optional `isLocked`, `lockDurationMonths`, `thirdPartyApprover` on `CreateQuickInvoiceUpdate` / `CreateMultiStepOrderUpdate` |
 | Detail | `GetInvoiceDetailAsync` handles normal invoices unchanged and locked invoices with optional live lock fields |
-| Approval | `GetApprovalListAsync`, `GetApprovalDetailAsync`, `GetApprovalReportAsync` in `_Order` / `OrderController` |
+| Approval | `GetApprovalListAsync`, `GetApprovalDetailAsync` (order-keyed detail), `GetApprovalReportAsync` in `_Order` / `OrderController` |
 | Result fields | `InvoiceResult`: normal invoice fields plus optional locked detail fields |
 | Config | `_Order/DTOs/Settings/LockedInvoiceSettings.cs` → `RegisterSetting` in `ControllerServiceCollectionExtensions.cs`; docker env in `docker-compose.yml` |
 | Domain | `Invoice.Lock` (`LockDetail`), `LockState` enum — `SLT.Domain/Collections/Invoice.cs` |

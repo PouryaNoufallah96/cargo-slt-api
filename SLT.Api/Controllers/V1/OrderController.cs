@@ -99,8 +99,8 @@ namespace SLT.Api.Controllers.V1
         [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
         [SwaggerOperation(Summary = "Get approval detail", Tags = ["Invoice"])]
-        public async Task<InvoiceResult> GetApprovalDetailAsync(
-            InvoiceIdUpdate update)
+        public async Task<OrderFullResult> GetApprovalDetailAsync(
+            OrderIdUpdate update)
         {
             return await _orderService.GetApprovalDetailAsync(update, WalletAddress);
         }

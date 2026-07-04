@@ -14,6 +14,7 @@ using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Order.DTOs.Settings;
 using SLT.Services._Order.DTOs.Updates;
 using SLT.Services._Price.DTOs.Settings;
+using SLT.Services._Stake.DTOs.Settings;
 using SLT.Services._TransactionLog.DTOs;
 using System.Numerics;
 using System.Security.Cryptography;
@@ -27,6 +28,7 @@ namespace SLT.Services._Order
     public class OrderService(
         AvailableTokensSettings _availableTokenSetting,
         LockedInvoiceSettings _lockedInvoiceSettings,
+        StakeSetting _stakeSetting,
         ILogger<OrderService> _logger,
         IOrderRepository _orderRepository,
         IBlockChainService _blockChainService,
@@ -1142,28 +1144,63 @@ namespace SLT.Services._Order
                 .Take(pagination.Size)
                 .ToListAsync();
 
+            var orderIds = invoices.Select(i => i.OrderId).Distinct().ToList();
+            var orders = await _orderRepository.AsQueryable()
+                .Where(o => orderIds.Contains(o.OrderId))
+                .ToListAsync();
+
             return new ApprovalListResult
             {
                 TotalCount = totalCount,
                 PageCount = pageCount,
                 Data = invoices.Select(i =>
-                    ConvertToReslut(
+                {
+                    var result = ConvertToReslut(
                         i,
                         i.OwnerWallet.ToLower() == wallet ? OwnershipType.Owner : OwnershipType.Payer,
-                        walletAddress)).ToList()
+                        walletAddress);
+
+                    result.Type = orders
+                        .FirstOrDefault(o => o.OrderId.ToLower() == i.OrderId.ToLower())
+                        ?.Type;
+
+                    return result;
+                }).ToList()
             };
         }
 
-        public async Task<InvoiceResult> GetApprovalDetailAsync(InvoiceIdUpdate update, string walletAddress)
+        public async Task<OrderFullResult> GetApprovalDetailAsync(OrderIdUpdate update, string walletAddress)
         {
-            var invoice = await _invoiceRepository.AsQueryable()
-                .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower() && i.Lock != null)
-                .FirstOrDefaultAsync() ?? throw new NotFoundException(ApiResultStatusCode.NotFound, "Locked invoice not found!");
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new BadRequestException("Wallet address is required.");
 
-            if (!IsCallerAuthorizedApprover(invoice, walletAddress))
+            var order = await _orderRepository.AsQueryable()
+                .Where(q => q.State != OrderState.NotRegistered)
+                .Where(o => o.OrderId.ToLower() == update.OrderOrTransferId.ToLower()
+                         || o.TransferId.ToLower() == update.OrderOrTransferId.ToLower())
+                .FirstOrDefaultAsync() ?? throw new NotFoundException(ApiResultStatusCode.NotFound, "Order not found!");
+
+            var invoices = await _invoiceRepository.AsQueryable()
+                .Where(i => i.OrderId.ToLower() == order.OrderId.ToLower())
+                .Where(i => i.State != InvoiceState.NotRegistered)
+                .Where(i => i.Lock != null)
+                .ToListAsync();
+
+            if (!invoices.Any())
+                throw new NotFoundException(ApiResultStatusCode.NotFound, "Locked invoice not found!");
+
+            if (!invoices.Any(i => IsCallerAuthorizedApprover(i, walletAddress)))
                 throw new BaseException(ApiResultStatusCode.Forbidden, "Access denied", System.Net.HttpStatusCode.Forbidden);
 
-            return await GetLockedInvoiceResultAsync(invoice, walletAddress, false);
+            var type = order.OwnerWallet.ToLower() == walletAddress.ToLower()
+                ? OwnershipType.Owner
+                : OwnershipType.Payer;
+
+            var invoiceResults = invoices
+                .Select(i => ConvertToReslut(i, type, walletAddress))
+                .ToList();
+
+            return ConvertToReslut(invoiceResults, order, type);
         }
 
         public async Task<ApprovalReportResult> GetApprovalReportAsync(string walletAddress)
@@ -1623,6 +1660,7 @@ namespace SLT.Services._Order
                 LivePayoutPreviewWei = invoice.Lock?.LivePayoutPreviewWei,
                 ProfitClaimed = invoice.Lock?.ProfitClaimed,
                 ProfitClaimedWei = invoice.Lock?.ProfitClaimedWei,
+                MonthlyProfitPercent = GetMonthlyProfitPercent(invoice),
                 Approved = invoice.Lock?.Approved,
                 Settled = invoice.Lock?.Settled,
                 IsCallerAuthorizedApprover = invoice.Lock == null || string.IsNullOrWhiteSpace(walletAddress)
@@ -1682,10 +1720,21 @@ namespace SLT.Services._Order
                 LivePayoutPreviewWei = invoice.Lock.LivePayoutPreviewWei,
                 ProfitClaimed = invoice.Lock.ProfitClaimed,
                 ProfitClaimedWei = invoice.Lock.ProfitClaimedWei,
+                MonthlyProfitPercent = GetMonthlyProfitPercent(invoice),
                 Approved = invoice.Lock.Approved,
                 Settled = invoice.Lock.Settled,
                 IsCallerAuthorizedApprover = isCallerAuthorizedApprover
             };
+        }
+
+        private decimal? GetMonthlyProfitPercent(Invoice invoice)
+        {
+            if (invoice.Lock == null)
+                return null;
+
+            return _stakeSetting.Plans
+                .FirstOrDefault(p => p.DurationInMonths == invoice.Lock.DurationMonths)
+                ?.MonthlyProfitPercent;
         }
 
         ///// <summary>

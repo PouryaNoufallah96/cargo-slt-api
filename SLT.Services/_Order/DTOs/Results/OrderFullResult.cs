@@ -38,6 +38,7 @@ namespace SLT.Services._Order.DTOs.Results
         public int? LockDurationMonths { get; set; }
         public string ApproverWallet { get; set; } = null;
         public OwnershipType OwnershipType { get; set; }
+        public OrderType? Type { get; set; } = null;
         public LockState? LockState { get; set; } = null;
         public DateTime? LockedUntilMoment { get; set; }
         public DateTime? ApprovedMoment { get; set; }
@@ -55,6 +56,7 @@ namespace SLT.Services._Order.DTOs.Results
         public string LivePayoutPreviewWei { get; set; } = null;
         public decimal? ProfitClaimed { get; set; } = null;
         public string ProfitClaimedWei { get; set; } = null;
+        public decimal? MonthlyProfitPercent { get; set; } = null;
         public bool? Approved { get; set; } = null;
         public bool? Settled { get; set; } = null;
         public bool? IsCallerAuthorizedApprover { get; set; } = null;

@@ -15,7 +15,7 @@ namespace SLT.Services._Order
         Task<OrderFullResult> GetOrderDetailAsync(OrderIdUpdate update, string walletAddress);
         Task<OrderTotalReportResult> GetTotalReportAsync(string walletAddress);
         Task<ApprovalListResult> GetApprovalListAsync(GetApprovalListUpdate update, string walletAddress);
-        Task<InvoiceResult> GetApprovalDetailAsync(InvoiceIdUpdate update, string walletAddress);
+        Task<OrderFullResult> GetApprovalDetailAsync(OrderIdUpdate update, string walletAddress);
         Task<ApprovalReportResult> GetApprovalReportAsync(string walletAddress);
 
         Task<string> DeletePendingOrderAsync(DeletePendingOrderUpdate update,string walletAddress); 
