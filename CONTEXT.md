@@ -13,7 +13,7 @@ A payable line tied to an order; synced to on-chain forward-sale contract fields
 _Avoid_: bill
 
 **Locked Invoice**:
-An invoice paid in a time-locked, approval-gated escrow mode on the same invoice contract: funds are held and accrue yield until both maturity and approver confirmation, then settled. The product/UI label is "Conditional Payment". Within a multi-step order, locking is all-or-nothing — every step is locked or none is. API: optional `isLocked` + lock fields on existing create DTOs; locked live detail via `GetLockedInvoiceDetailAsync`.
+An invoice paid in a time-locked, approval-gated escrow mode on the same invoice contract: funds are held and accrue yield until both maturity and approver confirmation, then settled. The product/UI label is "Conditional Payment". Within a multi-step order, locking is all-or-nothing — every step is locked or none is. API: optional `isLocked` + lock fields on existing create DTOs; locked live detail fields are optional fields on `GetInvoiceDetailAsync`.
 _Avoid_: Conditional Payment (in code/glossary), Escrow invoice
 
 **Approver**:

@@ -88,11 +88,30 @@ namespace SLT.Api.Controllers.V1
         [HttpPost("[action]")]
         [CustomRateLimit]
         [Authorize(RequireActiveUser = false)]
-        [SwaggerOperation(Summary = "Get locked invoice detail", Tags = ["Invoice"])]
-        public async Task<LockedInvoiceDetailResult> GetLockedInvoiceDetailAsync(
+        [SwaggerOperation(Summary = "Get approval list", Tags = ["Invoice"])]
+        public async Task<ApprovalListResult> GetApprovalListAsync(
+            GetApprovalListUpdate update)
+        {
+            return await _orderService.GetApprovalListAsync(update, WalletAddress);
+        }
+
+        [HttpPost("[action]")]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = false)]
+        [SwaggerOperation(Summary = "Get approval detail", Tags = ["Invoice"])]
+        public async Task<InvoiceResult> GetApprovalDetailAsync(
             InvoiceIdUpdate update)
         {
-            return await _orderService.GetLockedInvoiceDetailAsync(update, WalletAddress);
+            return await _orderService.GetApprovalDetailAsync(update, WalletAddress);
+        }
+
+        [HttpPost("[action]")]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = false)]
+        [SwaggerOperation(Summary = "Get approval report", Tags = ["Invoice"])]
+        public async Task<ApprovalReportResult> GetApprovalReportAsync()
+        {
+            return await _orderService.GetApprovalReportAsync(WalletAddress);
         }
 
 

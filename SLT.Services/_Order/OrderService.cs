@@ -1074,7 +1074,7 @@ namespace SLT.Services._Order
                 : OwnershipType.Payer;
 
             var invoiceResults = invoices
-                .Select(i => ConvertToReslut(i, type))
+                .Select(i => ConvertToReslut(i, type, walletAddress))
                 .ToList();
 
             return ConvertToReslut(invoiceResults, order, type);
@@ -1090,41 +1090,133 @@ namespace SLT.Services._Order
         public async Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update, string walletAddress)
         {
             var invoice = await _invoiceRepository.AsQueryable()
-                .Where(q => q.State != InvoiceState.NotRegistered)
                 .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
                 .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
+
+            if (invoice.Lock != null)
+                return await GetLockedInvoiceResultAsync(invoice, walletAddress, true);
+
+            if (invoice.State == InvoiceState.NotRegistered)
+                throw new NotFoundException("Invoice not found!");
 
             var type = invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
                ? OwnershipType.Owner
                : OwnershipType.Payer;
 
-            return ConvertToReslut(invoice, type);
+            return ConvertToReslut(invoice, type, walletAddress);
         }
 
-        public async Task<LockedInvoiceDetailResult> GetLockedInvoiceDetailAsync(InvoiceIdUpdate update, string walletAddress)
+        public async Task<ApprovalListResult> GetApprovalListAsync(GetApprovalListUpdate update, string walletAddress)
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new BadRequestException("Wallet address is required.");
+
+            var wallet = walletAddress.ToLower();
+            var query = _invoiceRepository.AsQueryable()
+                .Where(i => i.Lock != null)
+                .Where(i =>
+                    (i.PayerWallet != null && i.PayerWallet.ToLower() == wallet) ||
+                    (i.Lock.ApproverWallet != null && i.Lock.ApproverWallet.ToLower() == wallet));
+
+            if (update.Status == ApprovalStatus.Done)
+            {
+                query = query.Where(i =>
+                    i.Lock.State == LockState.Approved ||
+                    i.Lock.State == LockState.Released ||
+                    i.Lock.State == LockState.Refunded);
+            }
+            else
+            {
+                query = query.Where(i => i.Lock.State == LockState.Funded);
+            }
+
+            var totalCount = await query.CountAsync();
+            var pagination = update.Pagination;
+            var pageCount = (int)Math.Ceiling(
+                totalCount / (double)pagination.Size
+            );
+
+            var invoices = await query
+                .OrderByDescending(i => i.CreatedMoment)
+                .Skip((pagination.Page - 1) * pagination.Size)
+                .Take(pagination.Size)
+                .ToListAsync();
+
+            return new ApprovalListResult
+            {
+                TotalCount = totalCount,
+                PageCount = pageCount,
+                Data = invoices.Select(i =>
+                    ConvertToReslut(
+                        i,
+                        i.OwnerWallet.ToLower() == wallet ? OwnershipType.Owner : OwnershipType.Payer,
+                        walletAddress)).ToList()
+            };
+        }
+
+        public async Task<InvoiceResult> GetApprovalDetailAsync(InvoiceIdUpdate update, string walletAddress)
         {
             var invoice = await _invoiceRepository.AsQueryable()
                 .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower() && i.Lock != null)
                 .FirstOrDefaultAsync() ?? throw new NotFoundException(ApiResultStatusCode.NotFound, "Locked invoice not found!");
 
-            if (invoice.OwnerWallet.ToLower() != walletAddress.ToLower() &&
-                (string.IsNullOrWhiteSpace(invoice.PayerWallet) || invoice.PayerWallet.ToLower() != walletAddress.ToLower()) &&
-                (string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) || invoice.Lock.ApproverWallet.ToLower() != walletAddress.ToLower()))
-            {
+            if (!IsCallerAuthorizedApprover(invoice, walletAddress))
                 throw new BaseException(ApiResultStatusCode.Forbidden, "Access denied", System.Net.HttpStatusCode.Forbidden);
-            }
 
-            var type = invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
+            return await GetLockedInvoiceResultAsync(invoice, walletAddress, false);
+        }
+
+        public async Task<ApprovalReportResult> GetApprovalReportAsync(string walletAddress)
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new BadRequestException("Wallet address is required.");
+
+            var wallet = walletAddress.ToLower();
+            var query = _invoiceRepository.AsQueryable()
+                .Where(i => i.Lock != null)
+                .Where(i =>
+                    (i.PayerWallet != null && i.PayerWallet.ToLower() == wallet) ||
+                    (i.Lock.ApproverWallet != null && i.Lock.ApproverWallet.ToLower() == wallet));
+
+            var pendingApprovalCount = await query
+                .Where(i => i.Lock.State == LockState.Funded)
+                .CountAsync();
+
+            var doneApprovalCount = await query
+                .Where(i =>
+                    i.Lock.State == LockState.Approved ||
+                    i.Lock.State == LockState.Released ||
+                    i.Lock.State == LockState.Refunded)
+                .CountAsync();
+
+            var totalCount = pendingApprovalCount + doneApprovalCount;
+            var approvalProgress = totalCount == 0
+                ? 0
+                : Math.Round((decimal)doneApprovalCount / totalCount * 100, 2);
+
+            return new ApprovalReportResult
+            {
+                PendingApprovalCount = pendingApprovalCount,
+                DoneApprovalCount = doneApprovalCount,
+                ApprovalProgress = approvalProgress
+            };
+        }
+
+        private async Task<InvoiceResult> GetLockedInvoiceResultAsync(Invoice invoice, string walletAddress, bool allowOwner)
+        {
+            var isOwner = invoice.OwnerWallet.ToLower() == walletAddress.ToLower();
+            var isCallerAuthorizedApprover = IsCallerAuthorizedApprover(invoice, walletAddress);
+
+            if (!isCallerAuthorizedApprover && (!allowOwner || !isOwner))
+                throw new BaseException(ApiResultStatusCode.Forbidden, "Access denied", System.Net.HttpStatusCode.Forbidden);
+
+            var type = isOwner
                ? OwnershipType.Owner
                : OwnershipType.Payer;
 
             if (invoice.Lock.State == LockState.Released || invoice.Lock.State == LockState.Refunded)
             {
-                var isCallerAuthorizedApprover =
-                    (!string.IsNullOrWhiteSpace(invoice.PayerWallet) && invoice.PayerWallet.ToLower() == walletAddress.ToLower()) ||
-                    (!string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) && invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower());
-
-                return ConvertToLockedInvoiceDetailResult(
+                return ConvertToInvoiceDetailResult(
                     invoice,
                     type,
                     invoice.TokenAmountAtPayment ?? 0,
@@ -1166,15 +1258,20 @@ namespace SLT.Services._Order
             await _invoiceRepository.ReplaceOneAsync(invoice);
 
             var isCallerAuthorizedApproverLive =
-                (!string.IsNullOrWhiteSpace(payerWallet) && payerWallet.ToLower() == walletAddress.ToLower()) ||
-                (!string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) && invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower());
+                IsCallerAuthorizedApprover(invoice, walletAddress);
 
-            return ConvertToLockedInvoiceDetailResult(
+            return ConvertToInvoiceDetailResult(
                 invoice,
                 type,
                 principalAmount,
                 principalAmountWei,
                 isCallerAuthorizedApproverLive);
+        }
+
+        private static bool IsCallerAuthorizedApprover(Invoice invoice, string walletAddress)
+        {
+            return (!string.IsNullOrWhiteSpace(invoice.PayerWallet) && invoice.PayerWallet.ToLower() == walletAddress.ToLower()) ||
+                   (!string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) && invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower());
         }
 
 
@@ -1481,7 +1578,7 @@ namespace SLT.Services._Order
         /// </summary>
         /// <param name="invoice"></param>
         /// <returns></returns>
-        private InvoiceResult ConvertToReslut(Invoice invoice, OwnershipType type)
+        private InvoiceResult ConvertToReslut(Invoice invoice, OwnershipType type, string walletAddress = null)
         {
             return new InvoiceResult
             {
@@ -1508,19 +1605,41 @@ namespace SLT.Services._Order
                 IsLocked = invoice.Lock != null,
                 LockDurationMonths = invoice.Lock?.DurationMonths,
                 ApproverWallet = invoice.Lock?.ApproverWallet,
-                OwnershipType = type
+                OwnershipType = type,
+                LockState = invoice.Lock?.State,
+                LockedUntilMoment = invoice.Lock?.LockedUntilMoment,
+                ApprovedMoment = invoice.Lock?.ApprovedMoment,
+                ApprovedBy = invoice.Lock?.ApprovedBy,
+                ApproveHash = invoice.Lock?.ApproveHash,
+                BeneficiaryWallet = invoice.Lock?.BeneficiaryWallet,
+                ResolveHash = invoice.Lock?.ResolveHash,
+                StakedPayout = invoice.Lock?.StakedPayout,
+                StakedPayoutWei = invoice.Lock?.StakedPayoutWei,
+                FeeAmount = invoice.Lock?.FeeAmount,
+                FeeAmountWei = invoice.Lock?.FeeAmountWei,
+                PrincipalAmount = invoice.Lock == null ? null : invoice.TokenAmountAtPayment,
+                PrincipalAmountWei = invoice.Lock == null ? null : invoice.TokenAmountWeiAtPayment,
+                LivePayoutPreview = invoice.Lock?.LivePayoutPreview,
+                LivePayoutPreviewWei = invoice.Lock?.LivePayoutPreviewWei,
+                ProfitClaimed = invoice.Lock?.ProfitClaimed,
+                ProfitClaimedWei = invoice.Lock?.ProfitClaimedWei,
+                Approved = invoice.Lock?.Approved,
+                Settled = invoice.Lock?.Settled,
+                IsCallerAuthorizedApprover = invoice.Lock == null || string.IsNullOrWhiteSpace(walletAddress)
+                    ? null
+                    : IsCallerAuthorizedApprover(invoice, walletAddress)
             };
 
         }
 
-        private LockedInvoiceDetailResult ConvertToLockedInvoiceDetailResult(
+        private InvoiceResult ConvertToInvoiceDetailResult(
             Invoice invoice,
             OwnershipType type,
             decimal principalAmount,
             string principalAmountWei,
             bool isCallerAuthorizedApprover)
         {
-            return new LockedInvoiceDetailResult
+            return new InvoiceResult
             {
                 CreatedMoment = invoice.CreatedMoment,
                 ModifiedMoment = invoice.ModifiedMoment,
@@ -1629,7 +1748,8 @@ namespace SLT.Services._Order
                 PaymentDay = order.PaymentDay,
                 TransferId = order.TransferId,
                 Invoices = invoiceResults,
-                OwnershipType = type
+                OwnershipType = type,
+                IsLocked = invoiceResults.Any(i => i.IsLocked) ? true : null
             };
         }
 
