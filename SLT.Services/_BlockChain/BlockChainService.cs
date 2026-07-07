@@ -60,46 +60,52 @@ namespace SLT.Services._BlockChain
 
         public class GetInvoiceTupleDTO
         {
-            [Parameter("bytes32", "invoiceId", 1)]
-            public byte[] InvoiceId { get; set; }
-
-            [Parameter("address", "creator", 2)]
+            [Parameter("address", "creator", 1)]
             public string Creator { get; set; }
 
-            [Parameter("address", "payer", 3)]
+            [Parameter("address", "payer", 2)]
             public string Payer { get; set; }
 
-            [Parameter("address", "token", 4)]
+            [Parameter("address", "token", 3)]
             public string Token { get; set; }
 
-            [Parameter("uint256", "usdAmount", 5)]
+            [Parameter("uint256", "usdAmount", 4)]
             public BigInteger UsdAmount { get; set; }
 
-            [Parameter("uint256", "payAmount", 6)]
+            [Parameter("uint256", "payAmount", 5)]
             public BigInteger PayAmount { get; set; }
 
-            [Parameter("uint256", "unlockTime", 7)]
+            [Parameter("uint256", "unlockTime", 6)]
             public BigInteger UnlockTime { get; set; }
 
-            [Parameter("uint256", "lockDuration", 8)]
-            public BigInteger LockDuration { get; set; }
+            [Parameter("bool", "paid", 7)]
+            public bool Paid { get; set; }
 
-            [Parameter("address", "approver", 9)]
+            [Parameter("bool", "exists", 8)]
+            public bool Exists { get; set; }
+
+            [Parameter("bool", "isLocked", 9)]
+            public bool IsLocked { get; set; }
+
+            [Parameter("address", "approver", 10)]
             public string Approver { get; set; }
 
-            [Parameter("uint256", "lockedUntil", 10)]
+            [Parameter("uint256", "lockDuration", 11)]
+            public BigInteger LockDuration { get; set; }
+
+            [Parameter("uint256", "lockedUntil", 12)]
             public BigInteger LockedUntil { get; set; }
 
-            [Parameter("uint256", "stakedPayout", 11)]
+            [Parameter("uint256", "stakedPayout", 13)]
             public BigInteger StakedPayout { get; set; }
 
-            [Parameter("uint256", "profitClaimed", 12)]
+            [Parameter("uint256", "profitClaimed", 14)]
             public BigInteger ProfitClaimed { get; set; }
 
-            [Parameter("bool", "approved", 13)]
+            [Parameter("bool", "approved", 15)]
             public bool Approved { get; set; }
 
-            [Parameter("bool", "settled", 14)]
+            [Parameter("bool", "settled", 16)]
             public bool Settled { get; set; }
         }
 
@@ -644,13 +650,16 @@ namespace SLT.Services._BlockChain
 
                 return new LockedInvoiceChainResult
                 {
-                    InvoiceId = result.Invoice.InvoiceId?.ToHex(),
+                    InvoiceId = invoiceId,
                     Creator = result.Invoice.Creator,
                     Payer = result.Invoice.Payer,
                     Token = result.Invoice.Token,
                     UsdAmount = result.Invoice.UsdAmount,
                     PayAmount = result.Invoice.PayAmount,
                     UnlockTime = result.Invoice.UnlockTime,
+                    Paid = result.Invoice.Paid,
+                    Exists = result.Invoice.Exists,
+                    IsLocked = result.Invoice.IsLocked,
                     LockDuration = result.Invoice.LockDuration,
                     Approver = result.Invoice.Approver,
                     LockedUntil = result.Invoice.LockedUntil,

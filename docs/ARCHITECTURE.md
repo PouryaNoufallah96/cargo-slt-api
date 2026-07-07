@@ -83,7 +83,9 @@ on-chain events into `_TransactionLog` / `_Withdrawal` / `_Order`. Normal invoic
 events (`LockedInvoiceCreated`, `LockedInvoicePaid`, `LockedInvoiceApproved`,
 `LockedInvoiceResolved`) use additive handlers only — normal handlers are unchanged. Invoice detail
 can read live locked contract state via `GetLockedInvoiceAsync` until the invoice reaches a terminal
-lock state. Login signature recovery uses `Nethereum.Signer.EthereumMessageSigner` +
+lock state. If no third-party approver was set, locked-created and locked-paid sync keep the
+approver null and approval endpoints do not list the invoice; `LockedInvoiceResolved` decides release/refund from the emitted beneficiary. Login signature recovery uses
+`Nethereum.Signer.EthereumMessageSigner` +
 `Nethereum.Util.AddressUtil`.
 
 ## DI

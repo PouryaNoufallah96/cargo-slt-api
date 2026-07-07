@@ -11,6 +11,9 @@ namespace SLT.Services._BlockChain.DTOs.Results
         public BigInteger UsdAmount { get; set; }
         public BigInteger PayAmount { get; set; }
         public BigInteger UnlockTime { get; set; }
+        public bool Paid { get; set; }
+        public bool Exists { get; set; }
+        public bool IsLocked { get; set; }
         public BigInteger LockDuration { get; set; }
         public string Approver { get; set; }
         public BigInteger LockedUntil { get; set; }

@@ -215,6 +215,10 @@ namespace SLT.Services._TransactionLog
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
+                _logger.LogInformation(
+                    "LockedInvoiceCreated txlog persisted, syncing invoice | InvoiceId: {InvoiceId}, Network: {Network}, Hash: {Hash}",
+                    log.InvoiceId, log.Network, log.Hash);
+
                 var syncResult = await _orderService.SyncLockedInvoiceCreatedAsync(log);
 
                 if (syncResult != null && syncResult.Changed)
@@ -232,7 +236,7 @@ namespace SLT.Services._TransactionLog
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while creating LockedInvoiceCreated transaction log.");
+                _logger.LogError(ex, "Error while creating LockedInvoiceCreated transaction log. InvoiceId: {InvoiceId}, Hash: {Hash}", log.InvoiceId, log.Hash);
             }
         }
 
@@ -288,6 +292,10 @@ namespace SLT.Services._TransactionLog
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
+                _logger.LogInformation(
+                    "LockedInvoicePaid txlog persisted, syncing invoice | InvoiceId: {InvoiceId}, Network: {Network}, Hash: {Hash}",
+                    log.InvoiceId, log.Network, log.Hash);
+
                 var syncResult = await _orderService.SyncLockedInvoicePaidAsync(log);
 
                 if (syncResult != null && syncResult.Changed)
@@ -310,7 +318,7 @@ namespace SLT.Services._TransactionLog
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while creating LockedInvoicePaid transaction log.");
+                _logger.LogError(ex, "Error while creating LockedInvoicePaid transaction log. InvoiceId: {InvoiceId}, Hash: {Hash}", log.InvoiceId, log.Hash);
             }
         }
 
@@ -354,6 +362,10 @@ namespace SLT.Services._TransactionLog
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
+                _logger.LogInformation(
+                    "LockedInvoiceApproved txlog persisted, syncing invoice | InvoiceId: {InvoiceId}, Network: {Network}, Hash: {Hash}",
+                    log.InvoiceId, log.Network, log.Hash);
+
                 var syncResult = await _orderService.SyncLockedInvoiceApprovedAsync(log);
 
                 if (syncResult != null && syncResult.Changed)
@@ -379,7 +391,7 @@ namespace SLT.Services._TransactionLog
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while creating LockedInvoiceApproved transaction log.");
+                _logger.LogError(ex, "Error while creating LockedInvoiceApproved transaction log. InvoiceId: {InvoiceId}, Hash: {Hash}", log.InvoiceId, log.Hash);
             }
         }
 
@@ -432,6 +444,10 @@ namespace SLT.Services._TransactionLog
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
+                _logger.LogInformation(
+                    "LockedInvoiceResolved txlog persisted, syncing invoice | InvoiceId: {InvoiceId}, Network: {Network}, Hash: {Hash}",
+                    log.InvoiceId, log.Network, log.Hash);
+
                 var syncResult = await _orderService.SyncLockedInvoiceResolvedAsync(log);
 
                 if (syncResult != null && syncResult.Changed)
@@ -458,7 +474,7 @@ namespace SLT.Services._TransactionLog
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while creating LockedInvoiceResolved transaction log.");
+                _logger.LogError(ex, "Error while creating LockedInvoiceResolved transaction log. InvoiceId: {InvoiceId}, Hash: {Hash}", log.InvoiceId, log.Hash);
             }
         }
 
