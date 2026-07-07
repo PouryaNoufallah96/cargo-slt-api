@@ -542,6 +542,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
                 var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
 
+                _logger.LogInformation(
+                    "{Prefix} LockedInvoiceCreated received | InvoiceId: {InvoiceId}, Creator: {Creator}, Token: {Token}, UsdAmount: {UsdAmount}, LockDuration: {LockDuration}, Approver: {Approver}, UnlockDate: {UnlockDate}, Block: {Block}, Hash: {Hash}",
+                    InvoiceLogPrefix, invoiceId, eLog.Event.Creator, eLog.Event.Token, eLog.Event.UsdAmount, eLog.Event.LockDuration, eLog.Event.Approver, unlockDate, log.BlockNumber, log.TransactionHash);
+
                 await _transactionLogService.CreateLockedInvoiceCreatedAsync(
                     new _TransactionLog.DTOs.LockedInvoiceCreatedLog
                     {
@@ -582,6 +586,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
                 var lockedUntil = ConvertUnixSecondsToDateTime(eLog.Event.LockedUntil);
 
+                _logger.LogInformation(
+                    "{Prefix} LockedInvoicePaid received | InvoiceId: {InvoiceId}, Payer: {Payer}, Token: {Token}, PayAmount: {PayAmount}, LockedUntil: {LockedUntil}, Block: {Block}, Hash: {Hash}",
+                    InvoiceLogPrefix, invoiceId, eLog.Event.Payer, eLog.Event.Token, eLog.Event.PayAmount, lockedUntil, log.BlockNumber, log.TransactionHash);
+
                 await _transactionLogService.CreateLockedInvoicePaidAsync(
                     new _TransactionLog.DTOs.LockedInvoicePaidLog
                     {
@@ -619,6 +627,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
+                _logger.LogInformation(
+                    "{Prefix} LockedInvoiceApproved received | InvoiceId: {InvoiceId}, Approver: {Approver}, Block: {Block}, Hash: {Hash}",
+                    InvoiceLogPrefix, invoiceId, eLog.Event.Approver, log.BlockNumber, log.TransactionHash);
+
                 await _transactionLogService.CreateLockedInvoiceApprovedAsync(
                     new _TransactionLog.DTOs.LockedInvoiceApprovedLog
                     {
@@ -652,6 +664,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
+
+                _logger.LogInformation(
+                    "{Prefix} LockedInvoiceResolved received | InvoiceId: {InvoiceId}, Beneficiary: {Beneficiary}, Amount: {Amount}, FeeAmount: {FeeAmount}, Block: {Block}, Hash: {Hash}",
+                    InvoiceLogPrefix, invoiceId, eLog.Event.Beneficiary, eLog.Event.Amount, eLog.Event.FeeAmount, log.BlockNumber, log.TransactionHash);
 
                 await _transactionLogService.CreateLockedInvoiceResolvedAsync(
                     new _TransactionLog.DTOs.LockedInvoiceResolvedLog

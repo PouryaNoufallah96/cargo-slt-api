@@ -81,9 +81,11 @@ writes) and `_erc20Web3` (reads). Contract ABIs (forward-sale invoice, ERC20, st
 on-chain events into `_TransactionLog` / `_Withdrawal` / `_Order`. Normal invoice events
 (`InvoiceCreated`, `InvoicePaid`) use the existing txlog → order sync path; **locked invoice**
 events (`LockedInvoiceCreated`, `LockedInvoicePaid`, `LockedInvoiceApproved`,
-`LockedInvoiceResolved`) use additive handlers only — normal handlers are unchanged. Locked detail
-can read live contract state via `GetLockedInvoiceAsync` until the invoice reaches a terminal lock
-state. Login signature recovery uses `Nethereum.Signer.EthereumMessageSigner` +
+`LockedInvoiceResolved`) use additive handlers only — normal handlers are unchanged. Invoice detail
+can read live locked contract state via `GetLockedInvoiceAsync` until the invoice reaches a terminal
+lock state. If no third-party approver was set, locked-created and locked-paid sync keep the
+approver null and approval endpoints do not list the invoice; `LockedInvoiceResolved` decides release/refund from the emitted beneficiary. Login signature recovery uses
+`Nethereum.Signer.EthereumMessageSigner` +
 `Nethereum.Util.AddressUtil`.
 
 ## DI

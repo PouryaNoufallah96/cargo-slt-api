@@ -31,13 +31,14 @@ the rest are internal (hubs, background sync, helpers).
 
 ### Locked invoice (Conditional Payment)
 
-Optional fields on **existing** create DTOs; separate detail endpoint for live locked state.
+Optional fields on **existing** create DTOs; existing invoice detail returns optional live locked state.
 
 | Piece | Location |
 |-------|----------|
 | Create | `CreatePendingQuickOrderAsync` / `CreatePendingMultiStepOrderAsync` — optional `isLocked`, `lockDurationMonths`, `thirdPartyApprover` on `CreateQuickInvoiceUpdate` / `CreateMultiStepOrderUpdate` |
-| Detail | `GetLockedInvoiceDetailAsync` (locked only); `GetInvoiceDetailAsync` unchanged for normal |
-| Result fields | `InvoiceResult`: `isLocked`, `lockDurationMonths`, `approverWallet`; `LockedInvoiceDetailResult` for full locked detail |
+| Detail | `GetInvoiceDetailAsync` handles normal invoices unchanged and locked invoices with optional live lock fields |
+| Approval | `GetApprovalListAsync`, `GetApprovalDetailAsync` (order-keyed detail), `GetApprovalReportAsync` in `_Order` / `OrderController` |
+| Result fields | `InvoiceResult`: normal invoice fields plus optional locked detail fields |
 | Config | `_Order/DTOs/Settings/LockedInvoiceSettings.cs` → `RegisterSetting` in `ControllerServiceCollectionExtensions.cs`; docker env in `docker-compose.yml` |
 | Domain | `Invoice.Lock` (`LockDetail`), `LockState` enum — `SLT.Domain/Collections/Invoice.cs` |
 | Sync | `OrderService.SyncLockedInvoice*Async`; `TransactionLogService.CreateLockedInvoice*Async` |

@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Numerics;
+using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Nethereum.Contracts.Standards.ERC20.TokenList;
@@ -14,9 +16,8 @@ using SLT.Services._Order.DTOs.Results;
 using SLT.Services._Order.DTOs.Settings;
 using SLT.Services._Order.DTOs.Updates;
 using SLT.Services._Price.DTOs.Settings;
+using SLT.Services._Stake.DTOs.Settings;
 using SLT.Services._TransactionLog.DTOs;
-using System.Numerics;
-using System.Security.Cryptography;
 using Utilities.Enums;
 using Utilities.Exceptions.Common;
 using Utilities.Services.Contracts;
@@ -27,14 +28,26 @@ namespace SLT.Services._Order
     public class OrderService(
         AvailableTokensSettings _availableTokenSetting,
         LockedInvoiceSettings _lockedInvoiceSettings,
+        StakeSetting _stakeSetting,
         ILogger<OrderService> _logger,
         IOrderRepository _orderRepository,
         IBlockChainService _blockChainService,
         IInvoiceRepository _invoiceRepository,
-        IRandomService _randomService) : IOrderService, IScopedDependency
+        IRandomService _randomService
+    ) : IOrderService, IScopedDependency
     {
-        private const string ZeroAddress = "0x0000000000000000000000000000000000000000";
+        private static readonly string[] ZeroAddresses =
+        [
+            "0x0000000000000000000000000000000000000000",
+            "0x000000000000000000000000000000000000dead",
+        ];
 
+        // Max unix seconds DateTimeOffset.FromUnixTimeSeconds accepts (year 9999); unfunded locked invoices return a huge sentinel lockedUntil.
+        // (9999-01-01T00:00:00Z to 9999-12-31T23:59:59Z): 3652058 days * 24 * 60 * 60 - 1
+        private const long MaxUnixSeconds = (9999L * 365 + 24 /* leap years */ - 719162 /* epoch offset */) * 24 * 60 * 60 - 1; // 253402300799
+
+        // 30 days * 24 hours * 60 minutes * 60 seconds = seconds in a 30-day month
+        private const long SecondsPerMonth = 30 * 24 * 60 * 60; // 2,592,000
 
         /// <summary>
         /// use for create quick order
@@ -42,7 +55,11 @@ namespace SLT.Services._Order
         /// <param name="update"></param>
         /// <param name="walletAddress"></param>
         /// <returns></returns>
-        public async Task<OrderFullResult> CreatePendingQuickOrderAsync(CreateQuickInvoiceUpdate update, string walletAddress, string network)
+        public async Task<OrderFullResult> CreatePendingQuickOrderAsync(
+            CreateQuickInvoiceUpdate update,
+            string walletAddress,
+            string network
+        )
         {
             var newOrder = new Order
             {
@@ -56,11 +73,13 @@ namespace SLT.Services._Order
                 Transportation = null,
                 TotalAmount = update.Amount,
                 TransferId = _randomService.GetSecureAlphaNumericString(12).ToUpper(),
-
             };
 
             var tokenData = ValidateToken(update.TokenSymbol);
-            if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
+            if (tokenData.Network != network)
+                throw new BadRequestException(
+                    $"Please Sign with {tokenData.Network} Network with your wallet"
+                );
 
             int lockDurationMonths = 0;
             string approverWallet = null;
@@ -68,11 +87,17 @@ namespace SLT.Services._Order
             if (update.IsLocked)
             {
                 lockDurationMonths = ValidateLockDurationMonths(update.LockDurationMonths);
-                approverWallet = ValidateThirdPartyApprover(update.ThirdPartyApprover, walletAddress);
+                approverWallet = ValidateThirdPartyApprover(
+                    update.ThirdPartyApprover,
+                    walletAddress
+                );
             }
             else
             {
-                ValidateNormalInvoiceHasNoLockFields(update.LockDurationMonths, update.ThirdPartyApprover);
+                ValidateNormalInvoiceHasNoLockFields(
+                    update.LockDurationMonths,
+                    update.ThirdPartyApprover
+                );
             }
 
             await _orderRepository.InsertOneAsync(newOrder);
@@ -85,17 +110,23 @@ namespace SLT.Services._Order
                     tokenData,
                     update.IsLocked,
                     lockDurationMonths,
-                    approverWallet);
-                return ConvertToReslut(new List<InvoiceResult> { invoiceResult }, newOrder, OwnershipType.Owner);
+                    approverWallet
+                );
+                return ConvertToReslut(
+                    new List<InvoiceResult> { invoiceResult },
+                    newOrder,
+                    OwnershipType.Owner
+                );
             }
             catch (Exception ex)
             {
-                SentrySdk.CaptureMessage($"Error creating quick invoice for order ex : {ex.Message}");
+                SentrySdk.CaptureMessage(
+                    $"Error creating quick invoice for order ex : {ex.Message}"
+                );
                 await _orderRepository.DeleteByIdAsync(newOrder.Id);
                 throw new BadRequestException("Please try later!");
             }
         }
-
 
         /// <summary>
         /// use for create quick invoice
@@ -113,14 +144,12 @@ namespace SLT.Services._Order
             bool isLocked = false,
             int lockDurationMonths = 0,
             string approverWallet = null,
-            DateOnly? dateOnly = null)
+            DateOnly? dateOnly = null
+        )
         {
-
-
             var activeDate = dateOnly.HasValue
                 ? dateOnly.Value.ToDateTime(TimeOnly.MinValue)
-                : DateOnly.FromDateTime(DateTime.Now)
-                    .ToDateTime(TimeOnly.MinValue);
+                : DateOnly.FromDateTime(DateTime.Now).ToDateTime(TimeOnly.MinValue);
 
             var newInvoice = new Invoice
             {
@@ -143,17 +172,18 @@ namespace SLT.Services._Order
                 TokenAmountAtPayment = null,
                 TokenAmountWeiAtPayment = null,
                 TokenPriceAtPayment = null,
-                Lock = isLocked
-                    ? CreateLockDetail(true, lockDurationMonths, approverWallet)
-                    : null
+                Lock = isLocked ? CreateLockDetail(true, lockDurationMonths, approverWallet) : null,
             };
 
             await _invoiceRepository.InsertOneAsync(newInvoice);
             return ConvertToReslut(newInvoice, OwnershipType.Owner);
         }
 
-
-        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(CreateMultiStepOrderUpdate update, string walletAddress, string network)
+        public async Task<OrderFullResult> CreatePendingMultiStepOrderAsync(
+            CreateMultiStepOrderUpdate update,
+            string walletAddress,
+            string network
+        )
         {
             if (update == null)
                 throw new BadRequestException(nameof(update));
@@ -164,24 +194,30 @@ namespace SLT.Services._Order
             var invoicesTotal = update.Invoices.Sum(i => i.Amount);
             if (invoicesTotal != update.TotalAmount)
                 throw new BadRequestException(
-                    "Sum of invoice amounts does not match order total amount.");
+                    "Sum of invoice amounts does not match order total amount."
+                );
 
             string approverWallet = null;
 
             if (update.IsLocked)
-                approverWallet = ValidateThirdPartyApprover(update.ThirdPartyApprover, walletAddress);
+                approverWallet = ValidateThirdPartyApprover(
+                    update.ThirdPartyApprover,
+                    walletAddress
+                );
             else
                 ValidateNormalMultiStepOrderHasNoLockFields(update);
 
             foreach (var invoice in update.Invoices)
             {
                 var tokenData = ValidateToken(invoice.TokenSymbol);
-                if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
+                if (tokenData.Network != network)
+                    throw new BadRequestException(
+                        $"Please Sign with {tokenData.Network} Network with your wallet"
+                    );
 
                 if (update.IsLocked)
                     ValidateLockDurationMonths(invoice.LockDurationMonths);
             }
-
 
             var newOrder = new Order
             {
@@ -204,19 +240,20 @@ namespace SLT.Services._Order
                     newOrder,
                     update.Invoices,
                     update.IsLocked,
-                    approverWallet);
+                    approverWallet
+                );
 
                 return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
             }
             catch (Exception ex)
             {
-                SentrySdk.CaptureMessage($"Error creating multi-step invoices for order ex : {ex.Message}");
+                SentrySdk.CaptureMessage(
+                    $"Error creating multi-step invoices for order ex : {ex.Message}"
+                );
                 await _orderRepository.DeleteByIdAsync(newOrder.Id);
                 throw new BadRequestException("Please try later!");
             }
-
         }
-
 
         /// <summary>
         /// use for create multi step invoices
@@ -227,10 +264,11 @@ namespace SLT.Services._Order
         /// <exception cref="BadRequestException"></exception>
         /// <exception cref="Exception"></exception>
         private async Task<List<InvoiceResult>> CreatePendingMultiStepInvoicesAsync(
-        Order order,
-        List<MultiStepInvoiceUpdate> invoiceUpdates,
-        bool isLocked,
-        string approverWallet)
+            Order order,
+            List<MultiStepInvoiceUpdate> invoiceUpdates,
+            bool isLocked,
+            string approverWallet
+        )
         {
             if (invoiceUpdates == null || !invoiceUpdates.Any())
                 throw new BadRequestException("Invoice list is empty.");
@@ -272,8 +310,12 @@ namespace SLT.Services._Order
                     TokenAmountWeiAtPayment = null,
                     TokenPriceAtPayment = null,
                     Lock = isLocked
-                        ? CreateLockDetail(true, invoiceUpdate.LockDurationMonths.Value, approverWallet)
-                        : null
+                        ? CreateLockDetail(
+                            true,
+                            invoiceUpdate.LockDurationMonths.Value,
+                            approverWallet
+                        )
+                        : null,
                 };
 
                 invoices.Add(invoice);
@@ -281,14 +323,15 @@ namespace SLT.Services._Order
 
             await _invoiceRepository.InsertManyAsync(invoices);
 
-            return invoices.Select(invoice => ConvertToReslut(invoice, OwnershipType.Owner)).ToList();
+            return invoices
+                .Select(invoice => ConvertToReslut(invoice, OwnershipType.Owner))
+                .ToList();
         }
-
-
 
         public async Task RemoveNotRegisteredOrdersAsync()
         {
-            var orders = await _orderRepository.AsQueryable()
+            var orders = await _orderRepository
+                .AsQueryable()
                 .Where(o => o.State == OrderState.NotRegistered)
                 .Take(10)
                 .ToListAsync();
@@ -300,8 +343,11 @@ namespace SLT.Services._Order
 
             foreach (var order in orders)
             {
-                var hasOtherState = await _invoiceRepository.AsQueryable()
-                    .AnyAsync(i => i.OrderId == order.OrderId && i.State != InvoiceState.NotRegistered);
+                var hasOtherState = await _invoiceRepository
+                    .AsQueryable()
+                    .AnyAsync(i =>
+                        i.OrderId == order.OrderId && i.State != InvoiceState.NotRegistered
+                    );
 
                 if (hasOtherState)
                     continue;
@@ -314,7 +360,8 @@ namespace SLT.Services._Order
 
         public async Task ActivateNotRegisteredInvoiceAsync(string invoiceId, string hash)
         {
-            var invoice = await _invoiceRepository.AsQueryable()
+            var invoice = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.InvoiceId.ToLower() == invoiceId.ToLower())
                 .FirstOrDefaultAsync();
 
@@ -327,8 +374,11 @@ namespace SLT.Services._Order
                     "Invoice mode mismatch. Reason: normal event for locked draft, EventType: {EventType}, InvoiceId: {InvoiceId}, Hash: {Hash}",
                     BlockchainEventType.InvoiceCreated,
                     invoiceId,
-                    hash);
-                SentrySdk.CaptureMessage($"Invoice mode mismatch: normal event for locked draft, EventType {BlockchainEventType.InvoiceCreated}, InvoiceId {invoiceId}");
+                    hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"Invoice mode mismatch: normal event for locked draft, EventType {BlockchainEventType.InvoiceCreated}, InvoiceId {invoiceId}"
+                );
                 return;
             }
 
@@ -337,17 +387,20 @@ namespace SLT.Services._Order
                 Builders<Invoice>.Filter.Eq(x => x.State, InvoiceState.NotRegistered)
             );
 
-            var update = Builders<Invoice>.Update
-                .Set(x => x.State, InvoiceState.Pending)
+            var update = Builders<Invoice>
+                .Update.Set(x => x.State, InvoiceState.Pending)
                 .Set(x => x.RegisterHash, hash);
 
             var options = new FindOneAndUpdateOptions<Invoice>
             {
-                ReturnDocument = ReturnDocument.After
+                ReturnDocument = ReturnDocument.After,
             };
 
-            var updatedInvoice = await _invoiceRepository
-                .FindOneAndUpdateWithOptionAsync(filter, update, options);
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(
+                filter,
+                update,
+                options
+            );
 
             if (updatedInvoice == null)
                 return;
@@ -357,15 +410,10 @@ namespace SLT.Services._Order
                 Builders<Order>.Filter.Eq(o => o.State, OrderState.NotRegistered)
             );
 
-            var orderUpdate = Builders<Order>.Update
-                .Set(o => o.State, OrderState.Pending);
+            var orderUpdate = Builders<Order>.Update.Set(o => o.State, OrderState.Pending);
 
             await _orderRepository.FindOneAndUpdateAsync(orderFilter, orderUpdate);
         }
-
-
-
-
 
         /// <summary>
         /// use for sync paid invoice
@@ -374,13 +422,21 @@ namespace SLT.Services._Order
         /// <param name="payerWallet"></param>
         /// <param name="hash"></param>
         /// <returns></returns>
-        public async Task<string> SyncPaidInvoiceAsync(string invoiceId, string payerWallet, string hash)
+        public async Task<string> SyncPaidInvoiceAsync(
+            string invoiceId,
+            string payerWallet,
+            string hash
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
-                .Where(q => q.InvoiceId.ToLower() == invoiceId.ToLower() && q.State == InvoiceState.Pending)
+            var invoice = await _invoiceRepository
+                .AsQueryable()
+                .Where(q =>
+                    q.InvoiceId.ToLower() == invoiceId.ToLower() && q.State == InvoiceState.Pending
+                )
                 .FirstOrDefaultAsync();
 
-            if (invoice == null) return null;
+            if (invoice == null)
+                return null;
 
             invoice.PaymentHash = hash;
             invoice.PayMoment = DateTime.UtcNow;
@@ -400,14 +456,30 @@ namespace SLT.Services._Order
             return invoice.OwnerWallet;
         }
 
-        public async Task<LockedInvoiceSyncResult> SyncLockedInvoiceCreatedAsync(LockedInvoiceCreatedLog log)
+        public async Task<LockedInvoiceSyncResult> SyncLockedInvoiceCreatedAsync(
+            LockedInvoiceCreatedLog log
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
+            _logger.LogInformation(
+                "Sync LockedInvoiceCreated start | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                log.InvoiceId,
+                log.Hash
+            );
+
+            var invoice = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.InvoiceId.ToLower() == log.InvoiceId.ToLower())
                 .FirstOrDefaultAsync();
 
             if (invoice == null)
+            {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceCreated skipped: invoice not found | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    log.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
+            }
 
             if (invoice.Lock == null)
             {
@@ -415,12 +487,15 @@ namespace SLT.Services._Order
                     "Invoice mode mismatch. Reason: locked event for normal draft, EventType: {EventType}, InvoiceId: {InvoiceId}, Hash: {Hash}",
                     BlockchainEventType.LockedInvoiceCreated,
                     log.InvoiceId,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoiceCreated}, InvoiceId {log.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoiceCreated}, InvoiceId {log.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
             }
 
-            var durationMonths = checked((int)log.LockDuration);
+            var durationMonths = checked((int)(log.LockDuration / SecondsPerMonth));
 
             if (invoice.Lock.DurationMonths != durationMonths)
             {
@@ -429,8 +504,11 @@ namespace SLT.Services._Order
                     invoice.InvoiceId,
                     invoice.Lock.DurationMonths,
                     durationMonths,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"LockedInvoiceCreated draft mismatch: DurationMonths, InvoiceId {invoice.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"LockedInvoiceCreated draft mismatch: DurationMonths, InvoiceId {invoice.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -438,20 +516,28 @@ namespace SLT.Services._Order
                     OrderId = invoice.OrderId,
                     OwnerWallet = invoice.OwnerWallet,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
             var approverWallet = log.Approver;
-            if (!string.IsNullOrWhiteSpace(approverWallet) && approverWallet.ToLower() == ZeroAddress.ToLower())
+            if (
+                !string.IsNullOrWhiteSpace(approverWallet)
+                && ZeroAddresses.Contains(approverWallet.ToLower())
+            )
                 approverWallet = null;
 
             var draftApprover = invoice.Lock.ApproverWallet;
             var approverMatches =
-                (string.IsNullOrWhiteSpace(draftApprover) && string.IsNullOrWhiteSpace(approverWallet)) ||
-                (!string.IsNullOrWhiteSpace(draftApprover) &&
-                 !string.IsNullOrWhiteSpace(approverWallet) &&
-                 draftApprover.ToLower() == approverWallet.ToLower());
+                (
+                    string.IsNullOrWhiteSpace(draftApprover)
+                    && string.IsNullOrWhiteSpace(approverWallet)
+                )
+                || (
+                    !string.IsNullOrWhiteSpace(draftApprover)
+                    && !string.IsNullOrWhiteSpace(approverWallet)
+                    && draftApprover.ToLower() == approverWallet.ToLower()
+                );
 
             if (!approverMatches)
             {
@@ -460,8 +546,11 @@ namespace SLT.Services._Order
                     invoice.InvoiceId,
                     draftApprover,
                     approverWallet,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"LockedInvoiceCreated draft mismatch: ApproverWallet, InvoiceId {invoice.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"LockedInvoiceCreated draft mismatch: ApproverWallet, InvoiceId {invoice.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -469,12 +558,19 @@ namespace SLT.Services._Order
                     OrderId = invoice.OrderId,
                     OwnerWallet = invoice.OwnerWallet,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
             if (invoice.State != InvoiceState.NotRegistered)
             {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceCreated skipped: invoice already registered | InvoiceId: {InvoiceId}, InvoiceState: {InvoiceState}, LockState: {LockState}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    invoice.State,
+                    invoice.Lock.State,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -483,7 +579,7 @@ namespace SLT.Services._Order
                     OwnerWallet = invoice.OwnerWallet,
                     ApproverWallet = invoice.Lock.ApproverWallet,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
@@ -492,20 +588,30 @@ namespace SLT.Services._Order
                 Builders<Invoice>.Filter.Eq(x => x.State, InvoiceState.NotRegistered)
             );
 
-            var update = Builders<Invoice>.Update
-                .Set(x => x.State, InvoiceState.Locked)
+            var update = Builders<Invoice>
+                .Update.Set(x => x.State, InvoiceState.Locked)
                 .Set(x => x.RegisterHash, log.Hash)
+                .Set(x => x.Lock.ApproverWallet, approverWallet)
                 .Max(x => x.Lock.State, LockState.Created);
 
             var options = new FindOneAndUpdateOptions<Invoice>
             {
-                ReturnDocument = ReturnDocument.After
+                ReturnDocument = ReturnDocument.After,
             };
 
-            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(
+                filter,
+                update,
+                options
+            );
 
             if (updatedInvoice == null)
             {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceCreated skipped: concurrent update lost (state no longer NotRegistered) | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -514,7 +620,7 @@ namespace SLT.Services._Order
                     OwnerWallet = invoice.OwnerWallet,
                     ApproverWallet = invoice.Lock.ApproverWallet,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
@@ -523,10 +629,16 @@ namespace SLT.Services._Order
                 Builders<Order>.Filter.Eq(o => o.State, OrderState.NotRegistered)
             );
 
-            var orderUpdate = Builders<Order>.Update
-                .Set(o => o.State, OrderState.Pending);
+            var orderUpdate = Builders<Order>.Update.Set(o => o.State, OrderState.Pending);
 
             await _orderRepository.FindOneAndUpdateAsync(orderFilter, orderUpdate);
+
+            _logger.LogInformation(
+                "Sync LockedInvoiceCreated applied: invoice NotRegistered -> Locked, Lock -> Created, order -> Pending | InvoiceId: {InvoiceId}, OrderId: {OrderId}, Hash: {Hash}",
+                updatedInvoice.InvoiceId,
+                updatedInvoice.OrderId,
+                log.Hash
+            );
 
             return new LockedInvoiceSyncResult
             {
@@ -536,18 +648,35 @@ namespace SLT.Services._Order
                 OwnerWallet = updatedInvoice.OwnerWallet,
                 ApproverWallet = updatedInvoice.Lock.ApproverWallet,
                 LockState = LockState.Created,
-                InvoiceState = InvoiceState.Locked
+                InvoiceState = InvoiceState.Locked,
             };
         }
 
-        public async Task<LockedInvoiceSyncResult> SyncLockedInvoicePaidAsync(LockedInvoicePaidLog log)
+        public async Task<LockedInvoiceSyncResult> SyncLockedInvoicePaidAsync(
+            LockedInvoicePaidLog log
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
+            _logger.LogInformation(
+                "Sync LockedInvoicePaid start | InvoiceId: {InvoiceId}, Payer: {Payer}, Hash: {Hash}",
+                log.InvoiceId,
+                log.Payer,
+                log.Hash
+            );
+
+            var invoice = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.InvoiceId.ToLower() == log.InvoiceId.ToLower())
                 .FirstOrDefaultAsync();
 
             if (invoice == null)
+            {
+                _logger.LogDebug(
+                    "Sync LockedInvoicePaid skipped: invoice not found | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    log.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
+            }
 
             if (invoice.Lock == null)
             {
@@ -555,51 +684,62 @@ namespace SLT.Services._Order
                     "Invoice mode mismatch. Reason: locked event for normal draft, EventType: {EventType}, InvoiceId: {InvoiceId}, Hash: {Hash}",
                     BlockchainEventType.LockedInvoicePaid,
                     log.InvoiceId,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoicePaid}, InvoiceId {log.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoicePaid}, InvoiceId {log.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
             }
 
-            if (invoice.State == InvoiceState.NotRegistered)
-            {
-                return new LockedInvoiceSyncResult
-                {
-                    Changed = false,
-                    InvoiceId = invoice.InvoiceId,
-                    OrderId = invoice.OrderId,
-                    OwnerWallet = invoice.OwnerWallet,
-                    LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
-                };
-            }
+            // if (invoice.State == InvoiceState.Locked)
+            // {
+            //     _logger.LogDebug(
+            //         "Sync LockedInvoicePaid skipped: draft not yet locked on-chain (Created not synced) | InvoiceId: {InvoiceId}, InvoiceState: {InvoiceState}, LockState: {LockState}, Hash: {Hash}",
+            //         invoice.InvoiceId, invoice.State, invoice.Lock.State, log.Hash);
+            //     return new LockedInvoiceSyncResult
+            //     {
+            //         Changed = false,
+            //         InvoiceId = invoice.InvoiceId,
+            //         OrderId = invoice.OrderId,
+            //         OwnerWallet = invoice.OwnerWallet,
+            //         LockState = invoice.Lock.State,
+            //         InvoiceState = invoice.State
+            //     };
+            // }
 
-            if (invoice.Lock.State >= LockState.Funded &&
-                !string.IsNullOrWhiteSpace(invoice.PaymentHash) &&
-                invoice.PaymentHash.ToLower() == log.Hash.ToLower() &&
-                !string.IsNullOrWhiteSpace(invoice.PayerWallet) &&
-                invoice.PayerWallet.ToLower() == log.Payer.ToLower())
-            {
-                return new LockedInvoiceSyncResult
-                {
-                    Changed = false,
-                    InvoiceId = invoice.InvoiceId,
-                    OrderId = invoice.OrderId,
-                    OwnerWallet = invoice.OwnerWallet,
-                    PayerWallet = invoice.PayerWallet,
-                    LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
-                };
-            }
+            // if (invoice.Lock.State >= LockState.Funded &&
+            //     !string.IsNullOrWhiteSpace(invoice.PaymentHash) &&
+            //     invoice.PaymentHash.ToLower() == log.Hash.ToLower() &&
+            //     !string.IsNullOrWhiteSpace(invoice.PayerWallet) &&
+            //     invoice.PayerWallet.ToLower() == log.Payer.ToLower())
+            // {
+            //     _logger.LogDebug(
+            //         "Sync LockedInvoicePaid skipped: already funded with same payment (idempotent) | InvoiceId: {InvoiceId}, LockState: {LockState}, Hash: {Hash}",
+            //         invoice.InvoiceId, invoice.Lock.State, log.Hash);
+            //     return new LockedInvoiceSyncResult
+            //     {
+            //         Changed = false,
+            //         InvoiceId = invoice.InvoiceId,
+            //         OrderId = invoice.OrderId,
+            //         OwnerWallet = invoice.OwnerWallet,
+            //         PayerWallet = invoice.PayerWallet,
+            //         LockState = invoice.Lock.State,
+            //         InvoiceState = invoice.State
+            //     };
+            // }
 
             var tokenData = ValidateToken(invoice.TokenSymbol);
             var payMoment = DateTime.UtcNow;
-            var tokenAmount = _blockChainService.ConvertFromWei(log.PayAmount, tokenData.PriceDecimalPlaces);
+            var tokenAmount = _blockChainService.ConvertFromWei(
+                log.PayAmount,
+                tokenData.PriceDecimalPlaces
+            );
             var tokenAmountWei = log.PayAmount.ToString();
-
             var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
 
-            var update = Builders<Invoice>.Update
-                .Set(x => x.PayerWallet, log.Payer)
+            var update = Builders<Invoice>
+                .Update.Set(x => x.PayerWallet, log.Payer)
                 .Set(x => x.PaymentHash, log.Hash)
                 .Set(x => x.PayMoment, payMoment)
                 .Set(x => x.TokenAmountAtPayment, tokenAmount)
@@ -609,13 +749,22 @@ namespace SLT.Services._Order
 
             var options = new FindOneAndUpdateOptions<Invoice>
             {
-                ReturnDocument = ReturnDocument.After
+                ReturnDocument = ReturnDocument.After,
             };
 
-            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(
+                filter,
+                update,
+                options
+            );
 
             if (updatedInvoice == null)
             {
+                _logger.LogDebug(
+                    "Sync LockedInvoicePaid skipped: concurrent update matched no document | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -623,9 +772,17 @@ namespace SLT.Services._Order
                     OrderId = invoice.OrderId,
                     OwnerWallet = invoice.OwnerWallet,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
+
+            _logger.LogInformation(
+                "Sync LockedInvoicePaid applied: Lock -> Funded, payer recorded | InvoiceId: {InvoiceId}, OrderId: {OrderId}, Payer: {Payer}, Hash: {Hash}",
+                updatedInvoice.InvoiceId,
+                updatedInvoice.OrderId,
+                updatedInvoice.PayerWallet,
+                log.Hash
+            );
 
             return new LockedInvoiceSyncResult
             {
@@ -635,18 +792,35 @@ namespace SLT.Services._Order
                 OwnerWallet = updatedInvoice.OwnerWallet,
                 PayerWallet = updatedInvoice.PayerWallet,
                 LockState = LockState.Funded,
-                InvoiceState = updatedInvoice.State
+                InvoiceState = updatedInvoice.State,
             };
         }
 
-        public async Task<LockedInvoiceSyncResult> SyncLockedInvoiceApprovedAsync(LockedInvoiceApprovedLog log)
+        public async Task<LockedInvoiceSyncResult> SyncLockedInvoiceApprovedAsync(
+            LockedInvoiceApprovedLog log
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
+            _logger.LogInformation(
+                "Sync LockedInvoiceApproved start | InvoiceId: {InvoiceId}, Approver: {Approver}, Hash: {Hash}",
+                log.InvoiceId,
+                log.Approver,
+                log.Hash
+            );
+
+            var invoice = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.InvoiceId.ToLower() == log.InvoiceId.ToLower())
                 .FirstOrDefaultAsync();
 
             if (invoice == null)
+            {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceApproved skipped: invoice not found | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    log.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
+            }
 
             if (invoice.Lock == null)
             {
@@ -654,61 +828,80 @@ namespace SLT.Services._Order
                     "Invoice mode mismatch. Reason: locked event for normal draft, EventType: {EventType}, InvoiceId: {InvoiceId}, Hash: {Hash}",
                     BlockchainEventType.LockedInvoiceApproved,
                     log.InvoiceId,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoiceApproved}, InvoiceId {log.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoiceApproved}, InvoiceId {log.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
             }
+            //
+            // if (invoice.State == InvoiceState.NotRegistered)
+            // {
+            //     _logger.LogDebug(
+            //         "Sync LockedInvoiceApproved skipped: draft not yet locked on-chain (Created not synced) | InvoiceId: {InvoiceId}, InvoiceState: {InvoiceState}, LockState: {LockState}, Hash: {Hash}",
+            //         invoice.InvoiceId, invoice.State, invoice.Lock.State, log.Hash);
+            //     return new LockedInvoiceSyncResult
+            //     {
+            //         Changed = false,
+            //         InvoiceId = invoice.InvoiceId,
+            //         OrderId = invoice.OrderId,
+            //         OwnerWallet = invoice.OwnerWallet,
+            //         LockState = invoice.Lock.State,
+            //         InvoiceState = invoice.State
+            //     };
+            // }
 
-            if (invoice.State == InvoiceState.NotRegistered)
-            {
-                return new LockedInvoiceSyncResult
-                {
-                    Changed = false,
-                    InvoiceId = invoice.InvoiceId,
-                    OrderId = invoice.OrderId,
-                    OwnerWallet = invoice.OwnerWallet,
-                    LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
-                };
-            }
-
-            if (invoice.Lock.State >= LockState.Approved &&
-                !string.IsNullOrWhiteSpace(invoice.Lock.ApproveHash) &&
-                invoice.Lock.ApproveHash.ToLower() == log.Hash.ToLower() &&
-                !string.IsNullOrWhiteSpace(invoice.Lock.ApprovedBy) &&
-                invoice.Lock.ApprovedBy.ToLower() == log.Approver.ToLower())
-            {
-                return new LockedInvoiceSyncResult
-                {
-                    Changed = false,
-                    InvoiceId = invoice.InvoiceId,
-                    OrderId = invoice.OrderId,
-                    OwnerWallet = invoice.OwnerWallet,
-                    ApproverWallet = invoice.Lock.ApprovedBy,
-                    LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
-                };
-            }
+            // if (invoice.Lock.State >= LockState.Approved &&
+            //     !string.IsNullOrWhiteSpace(invoice.Lock.ApproveHash) &&
+            //     invoice.Lock.ApproveHash.ToLower() == log.Hash.ToLower() &&
+            //     !string.IsNullOrWhiteSpace(invoice.Lock.ApprovedBy) &&
+            //     invoice.Lock.ApprovedBy.ToLower() == log.Approver.ToLower())
+            // {
+            //     _logger.LogDebug(
+            //         "Sync LockedInvoiceApproved skipped: already approved by same approver (idempotent) | InvoiceId: {InvoiceId}, LockState: {LockState}, Hash: {Hash}",
+            //         invoice.InvoiceId, invoice.Lock.State, log.Hash);
+            //     return new LockedInvoiceSyncResult
+            //     {
+            //         Changed = false,
+            //         InvoiceId = invoice.InvoiceId,
+            //         OrderId = invoice.OrderId,
+            //         OwnerWallet = invoice.OwnerWallet,
+            //         ApproverWallet = invoice.Lock.ApprovedBy,
+            //         LockState = invoice.Lock.State,
+            //         InvoiceState = invoice.State
+            //     };
+            // }
 
             var approvedMoment = DateTime.UtcNow;
 
             var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
 
-            var update = Builders<Invoice>.Update
-                .Set(x => x.Lock.ApprovedBy, log.Approver)
+            var update = Builders<Invoice>
+                .Update.Set(x => x.Lock.ApprovedBy, log.Approver)
                 .Set(x => x.Lock.ApprovedMoment, approvedMoment)
                 .Set(x => x.Lock.ApproveHash, log.Hash)
+                .Set(x => x.Lock.Approved, true)
                 .Max(x => x.Lock.State, LockState.Approved);
 
             var options = new FindOneAndUpdateOptions<Invoice>
             {
-                ReturnDocument = ReturnDocument.After
+                ReturnDocument = ReturnDocument.After,
             };
 
-            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(
+                filter,
+                update,
+                options
+            );
 
             if (updatedInvoice == null)
             {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceApproved skipped: concurrent update matched no document | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -717,9 +910,17 @@ namespace SLT.Services._Order
                     OwnerWallet = invoice.OwnerWallet,
                     ApproverWallet = invoice.Lock.ApprovedBy,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
+
+            _logger.LogInformation(
+                "Sync LockedInvoiceApproved applied: Lock -> Approved | InvoiceId: {InvoiceId}, OrderId: {OrderId}, Approver: {Approver}, Hash: {Hash}",
+                updatedInvoice.InvoiceId,
+                updatedInvoice.OrderId,
+                updatedInvoice.Lock.ApprovedBy,
+                log.Hash
+            );
 
             return new LockedInvoiceSyncResult
             {
@@ -730,18 +931,35 @@ namespace SLT.Services._Order
                 PayerWallet = updatedInvoice.PayerWallet,
                 ApproverWallet = updatedInvoice.Lock.ApprovedBy,
                 LockState = LockState.Approved,
-                InvoiceState = updatedInvoice.State
+                InvoiceState = updatedInvoice.State,
             };
         }
 
-        public async Task<LockedInvoiceSyncResult> SyncLockedInvoiceResolvedAsync(LockedInvoiceResolvedLog log)
+        public async Task<LockedInvoiceSyncResult> SyncLockedInvoiceResolvedAsync(
+            LockedInvoiceResolvedLog log
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
+            _logger.LogInformation(
+                "Sync LockedInvoiceResolved start | InvoiceId: {InvoiceId}, Beneficiary: {Beneficiary}, Hash: {Hash}",
+                log.InvoiceId,
+                log.Beneficiary,
+                log.Hash
+            );
+
+            var invoice = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.InvoiceId.ToLower() == log.InvoiceId.ToLower())
                 .FirstOrDefaultAsync();
 
             if (invoice == null)
+            {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceResolved skipped: invoice not found | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    log.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
+            }
 
             if (invoice.Lock == null)
             {
@@ -749,13 +967,25 @@ namespace SLT.Services._Order
                     "Invoice mode mismatch. Reason: locked event for normal draft, EventType: {EventType}, InvoiceId: {InvoiceId}, Hash: {Hash}",
                     BlockchainEventType.LockedInvoiceResolved,
                     log.InvoiceId,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoiceResolved}, InvoiceId {log.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"Invoice mode mismatch: locked event for normal draft, EventType {BlockchainEventType.LockedInvoiceResolved}, InvoiceId {log.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult { Changed = false, InvoiceId = log.InvoiceId };
             }
 
-            if (invoice.Lock.State == LockState.Released || invoice.Lock.State == LockState.Refunded)
+            if (
+                invoice.Lock.State == LockState.Released
+                || invoice.Lock.State == LockState.Refunded
+            )
             {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceResolved skipped: already resolved (terminal) | InvoiceId: {InvoiceId}, LockState: {LockState}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    invoice.Lock.State,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -765,17 +995,19 @@ namespace SLT.Services._Order
                     PayerWallet = invoice.PayerWallet,
                     BeneficiaryWallet = log.Beneficiary,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
-            var released = !string.IsNullOrWhiteSpace(log.Beneficiary) &&
-                             !string.IsNullOrWhiteSpace(invoice.OwnerWallet) &&
-                             log.Beneficiary.ToLower() == invoice.OwnerWallet.ToLower();
+            var released =
+                !string.IsNullOrWhiteSpace(log.Beneficiary)
+                && !string.IsNullOrWhiteSpace(invoice.OwnerWallet)
+                && log.Beneficiary.ToLower() == invoice.OwnerWallet.ToLower();
 
-            var refunded = !string.IsNullOrWhiteSpace(log.Beneficiary) &&
-                           !string.IsNullOrWhiteSpace(invoice.PayerWallet) &&
-                           log.Beneficiary.ToLower() == invoice.PayerWallet.ToLower();
+            var refunded =
+                !string.IsNullOrWhiteSpace(log.Beneficiary)
+                && !string.IsNullOrWhiteSpace(invoice.PayerWallet)
+                && log.Beneficiary.ToLower() == invoice.PayerWallet.ToLower();
 
             if (!released && !refunded)
             {
@@ -785,8 +1017,11 @@ namespace SLT.Services._Order
                     log.Beneficiary,
                     invoice.OwnerWallet,
                     invoice.PayerWallet,
-                    log.Hash);
-                SentrySdk.CaptureMessage($"LockedInvoiceResolved beneficiary mismatch for InvoiceId {log.InvoiceId}");
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"LockedInvoiceResolved beneficiary mismatch for InvoiceId {log.InvoiceId}"
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -796,37 +1031,53 @@ namespace SLT.Services._Order
                     PayerWallet = invoice.PayerWallet,
                     BeneficiaryWallet = log.Beneficiary,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
             var tokenData = ValidateToken(invoice.TokenSymbol);
             var targetLockState = released ? LockState.Released : LockState.Refunded;
             var targetInvoiceState = released ? InvoiceState.Completed : InvoiceState.Refunded;
-            var stakedPayout = _blockChainService.ConvertFromWei(log.Amount, tokenData.PriceDecimalPlaces);
-            var feeAmount = _blockChainService.ConvertFromWei(log.FeeAmount, tokenData.PriceDecimalPlaces);
+            var stakedPayout = _blockChainService.ConvertFromWei(
+                log.Amount,
+                tokenData.PriceDecimalPlaces
+            );
+            var feeAmount = _blockChainService.ConvertFromWei(
+                log.FeeAmount,
+                tokenData.PriceDecimalPlaces
+            );
 
             var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
 
-            var update = Builders<Invoice>.Update
-                .Set(x => x.State, targetInvoiceState)
+            var update = Builders<Invoice>
+                .Update.Set(x => x.State, targetInvoiceState)
                 .Set(x => x.Lock.BeneficiaryWallet, log.Beneficiary)
                 .Set(x => x.Lock.StakedPayout, stakedPayout)
                 .Set(x => x.Lock.StakedPayoutWei, log.Amount.ToString())
                 .Set(x => x.Lock.FeeAmount, feeAmount)
                 .Set(x => x.Lock.FeeAmountWei, log.FeeAmount.ToString())
                 .Set(x => x.Lock.ResolveHash, log.Hash)
+                .Set(x => x.Lock.Settled, true)
                 .Set(x => x.Lock.State, targetLockState);
 
             var options = new FindOneAndUpdateOptions<Invoice>
             {
-                ReturnDocument = ReturnDocument.After
+                ReturnDocument = ReturnDocument.After,
             };
 
-            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+            var updatedInvoice = await _invoiceRepository.FindOneAndUpdateWithOptionAsync(
+                filter,
+                update,
+                options
+            );
 
             if (updatedInvoice == null)
             {
+                _logger.LogDebug(
+                    "Sync LockedInvoiceResolved skipped: concurrent update matched no document | InvoiceId: {InvoiceId}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    log.Hash
+                );
                 return new LockedInvoiceSyncResult
                 {
                     Changed = false,
@@ -836,7 +1087,7 @@ namespace SLT.Services._Order
                     PayerWallet = invoice.PayerWallet,
                     BeneficiaryWallet = log.Beneficiary,
                     LockState = invoice.Lock.State,
-                    InvoiceState = invoice.State
+                    InvoiceState = invoice.State,
                 };
             }
 
@@ -849,6 +1100,17 @@ namespace SLT.Services._Order
                 _logger.LogError(e.Message);
             }
 
+            _logger.LogInformation(
+                "Sync LockedInvoiceResolved applied: {Outcome} | InvoiceId: {InvoiceId}, OrderId: {OrderId}, InvoiceState: {InvoiceState}, LockState: {LockState}, Beneficiary: {Beneficiary}, Hash: {Hash}",
+                released ? "released to owner" : "refunded to payer",
+                updatedInvoice.InvoiceId,
+                updatedInvoice.OrderId,
+                targetInvoiceState,
+                targetLockState,
+                log.Beneficiary,
+                log.Hash
+            );
+
             return new LockedInvoiceSyncResult
             {
                 Changed = true,
@@ -858,13 +1120,14 @@ namespace SLT.Services._Order
                 PayerWallet = updatedInvoice.PayerWallet,
                 BeneficiaryWallet = log.Beneficiary,
                 LockState = targetLockState,
-                InvoiceState = targetInvoiceState
+                InvoiceState = targetInvoiceState,
             };
         }
 
         private async Task SyncLockedOrderWithOrderIdAsync(string orderId)
         {
-            var order = await _orderRepository.AsQueryable()
+            var order = await _orderRepository
+                .AsQueryable()
                 .Where(q => q.State != OrderState.NotRegistered)
                 .Where(q => q.OrderId.ToLower() == orderId.ToLower())
                 .FirstOrDefaultAsync();
@@ -872,7 +1135,8 @@ namespace SLT.Services._Order
             if (order == null)
                 return;
 
-            var invoices = await _invoiceRepository.AsQueryable()
+            var invoices = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.OrderId.ToLower() == orderId.ToLower())
                 .ToListAsync();
 
@@ -881,7 +1145,9 @@ namespace SLT.Services._Order
 
             if (order.Type == OrderType.Quick)
             {
-                var hasTerminalInvoice = invoices.Any(i => i.State == InvoiceState.Completed || i.State == InvoiceState.Refunded);
+                var hasTerminalInvoice = invoices.Any(i =>
+                    i.State == InvoiceState.Completed || i.State == InvoiceState.Refunded
+                );
 
                 if (hasTerminalInvoice && order.State != OrderState.Completed)
                 {
@@ -895,7 +1161,9 @@ namespace SLT.Services._Order
 
             if (order.Type == OrderType.Multi)
             {
-                var allInvoicesTerminal = invoices.All(i => i.State == InvoiceState.Completed || i.State == InvoiceState.Refunded);
+                var allInvoicesTerminal = invoices.All(i =>
+                    i.State == InvoiceState.Completed || i.State == InvoiceState.Refunded
+                );
 
                 if (allInvoicesTerminal && order.State != OrderState.Completed)
                 {
@@ -906,8 +1174,6 @@ namespace SLT.Services._Order
             }
         }
 
-
-
         /// <summary>
         /// use for sync transaction log with order
         /// </summary>
@@ -915,7 +1181,8 @@ namespace SLT.Services._Order
         /// <returns></returns>
         public async Task SyncOrderWithOrderIdAsync(string orderId)
         {
-            var order = await _orderRepository.AsQueryable()
+            var order = await _orderRepository
+                .AsQueryable()
                 .Where(q => q.State != OrderState.NotRegistered)
                 .Where(q => q.OrderId.ToLower() == orderId.ToLower())
                 .FirstOrDefaultAsync();
@@ -923,7 +1190,8 @@ namespace SLT.Services._Order
             if (order == null)
                 return;
 
-            var invoices = await _invoiceRepository.AsQueryable()
+            var invoices = await _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.State != InvoiceState.NotRegistered)
                 .Where(q => q.OrderId.ToLower() == orderId.ToLower())
                 .ToListAsync();
@@ -958,7 +1226,6 @@ namespace SLT.Services._Order
             }
         }
 
-
         /// <summary>
         /// using for get order list
         /// </summary>
@@ -967,24 +1234,28 @@ namespace SLT.Services._Order
         /// <returns></returns>
         /// <exception cref="BadRequestException"></exception>
         public async Task<OrderListResult> GetOrderListAsync(
-        GetPendingOrderListUpdate update,
-        string walletAddress)
+            GetPendingOrderListUpdate update,
+            string walletAddress
+        )
         {
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new BadRequestException("Wallet address is required.");
 
-            var query = _orderRepository.AsQueryable().Where(q => q.State != OrderState.NotRegistered);
-
+            var query = _orderRepository
+                .AsQueryable()
+                .Where(q => q.State != OrderState.NotRegistered);
 
             if (update.ListType == OrderListType.Received)
             {
-                query = query.Where(o => o.OwnerWallet.ToLower() != null && o.OwnerWallet.ToLower() == walletAddress.ToLower());
+                query = query.Where(o =>
+                    o.OwnerWallet.ToLower() != null
+                    && o.OwnerWallet.ToLower() == walletAddress.ToLower()
+                );
             }
             else
             {
                 query = query.Where(o => o.SeenBy.Contains(walletAddress.ToLower()));
             }
-
 
             if (update.State == OrderState.Completed)
             {
@@ -995,13 +1266,10 @@ namespace SLT.Services._Order
                 query = query.Where(o => o.State == OrderState.Pending);
             }
 
-
             var totalCount = await query.CountAsync();
             var pagination = update.Pagination;
 
-            var pageCount = (int)Math.Ceiling(
-                totalCount / (double)pagination.Size
-            );
+            var pageCount = (int)Math.Ceiling(totalCount / (double)pagination.Size);
 
             var orders = await query
                 .OrderByDescending(o => o.CreatedMoment)
@@ -1013,23 +1281,25 @@ namespace SLT.Services._Order
             {
                 TotalCount = totalCount,
                 PageCount = pageCount,
-                Data = orders.Select(o => new OrderResult
-                {
-                    CreatedMoment = o.CreatedMoment,
-                    ModifiedMoment = o.ModifiedMoment,
-                    OrderId = o.OrderId,
-                    TransferId = o.TransferId,
+                Data = orders
+                    .Select(o => new OrderResult
+                    {
+                        CreatedMoment = o.CreatedMoment,
+                        ModifiedMoment = o.ModifiedMoment,
+                        OrderId = o.OrderId,
+                        TransferId = o.TransferId,
 
-                    OwnerWallet = o.OwnerWallet,
-                    PayerWallet = o.PayerWallet,
-                    SeenBy = o.SeenBy,
+                        OwnerWallet = o.OwnerWallet,
+                        PayerWallet = o.PayerWallet,
+                        SeenBy = o.SeenBy,
 
-                    TotalAmount = o.TotalAmount,
-                    Transportation = o.Transportation,
-                    Type = o.Type,
-                    State = o.State,
-                    PaymentDay = o.PaymentDay
-                }).ToList()
+                        TotalAmount = o.TotalAmount,
+                        Transportation = o.Transportation,
+                        Type = o.Type,
+                        State = o.State,
+                        PaymentDay = o.PaymentDay,
+                    })
+                    .ToList(),
             };
 
             return result;
@@ -1043,43 +1313,57 @@ namespace SLT.Services._Order
         /// <returns></returns>
         /// <exception cref="NotFoundException"></exception>
         /// <exception cref="BadRequestException"></exception>
-        public async Task<OrderFullResult> GetOrderDetailAsync(OrderIdUpdate update, string walletAddress)
+        public async Task<OrderFullResult> GetOrderDetailAsync(
+            OrderIdUpdate update,
+            string walletAddress
+        )
         {
-            var order = await _orderRepository.AsQueryable()
-                .Where(q => q.State != OrderState.NotRegistered)
-                 .Where(o => (o.OrderId.ToLower() == update.OrderOrTransferId.ToLower()
-                           || o.TransferId.ToLower() == update.OrderOrTransferId.ToLower())
-
-                           && (o.OwnerWallet.ToLower() == walletAddress.ToLower() || o.SeenBy.Contains(walletAddress.ToLower())))
-                .FirstOrDefaultAsync() ?? throw new NotFoundException("Order not found!");
+            var order =
+                await _orderRepository
+                    .AsQueryable()
+                    .Where(q => q.State != OrderState.NotRegistered)
+                    .Where(o =>
+                        (
+                            o.OrderId.ToLower() == update.OrderOrTransferId.ToLower()
+                            || o.TransferId.ToLower() == update.OrderOrTransferId.ToLower()
+                        )
+                        && (
+                            o.OwnerWallet.ToLower() == walletAddress.ToLower()
+                            || o.SeenBy.Contains(walletAddress.ToLower())
+                        )
+                    )
+                    .FirstOrDefaultAsync()
+                ?? throw new NotFoundException("Order not found!");
 
             if (order == null)
                 throw new BadRequestException("Order not found.");
 
-            var query = _invoiceRepository.AsQueryable()
+            var query = _invoiceRepository
+                .AsQueryable()
                 .Where(q => q.State != InvoiceState.NotRegistered)
                 .Where(i => i.OrderId.ToLower() == order.OrderId.ToLower());
 
-
             if (order.State == OrderState.Completed)
             {
-                query = query.Where(q => q.OwnerWallet.ToLower() == walletAddress.ToLower()
-                || q.PayerWallet.ToLower() == walletAddress.ToLower());
+                query = query.Where(q =>
+                    q.OwnerWallet.ToLower() == walletAddress.ToLower()
+                    || q.PayerWallet.ToLower() == walletAddress.ToLower()
+                );
             }
 
             var invoices = await query.ToListAsync();
 
-            var type = order.OwnerWallet.ToLower() == walletAddress.ToLower()
-                ? OwnershipType.Owner
-                : OwnershipType.Payer;
+            var type =
+                order.OwnerWallet.ToLower() == walletAddress.ToLower()
+                    ? OwnershipType.Owner
+                    : OwnershipType.Payer;
 
             var invoiceResults = invoices
-                .Select(i => ConvertToReslut(i, type))
+                .Select(i => ConvertToReslut(i, type, walletAddress))
                 .ToList();
 
             return ConvertToReslut(invoiceResults, order, type);
         }
-
 
         /// <summary>
         /// use for get invoice detail
@@ -1087,71 +1371,263 @@ namespace SLT.Services._Order
         /// <param name="update"></param>
         /// <returns></returns>
         /// <exception cref="NotFoundException"></exception>
-        public async Task<InvoiceResult> GetInvoiceDetailAsync(InvoiceIdUpdate update, string walletAddress)
+        public async Task<InvoiceResult> GetInvoiceDetailAsync(
+            InvoiceIdUpdate update,
+            string walletAddress
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
-                .Where(q => q.State != InvoiceState.NotRegistered)
-                .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
-                .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
+            var invoice =
+                await _invoiceRepository
+                    .AsQueryable()
+                    .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
+                    .FirstOrDefaultAsync()
+                ?? throw new NotFoundException("Invoice not found!");
 
-            var type = invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
-               ? OwnershipType.Owner
-               : OwnershipType.Payer;
+            if (invoice.State == InvoiceState.NotRegistered)
+                throw new NotFoundException("Invoice not found!");
 
-            return ConvertToReslut(invoice, type);
+            if (invoice.Lock != null)
+                return await GetLockedInvoiceResultAsync(invoice, walletAddress);
+
+            var type =
+                invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
+                    ? OwnershipType.Owner
+                    : OwnershipType.Payer;
+
+            return ConvertToReslut(invoice, type, walletAddress);
         }
 
-        public async Task<LockedInvoiceDetailResult> GetLockedInvoiceDetailAsync(InvoiceIdUpdate update, string walletAddress)
+        public async Task<ApprovalListResult> GetApprovalListAsync(
+            GetApprovalListUpdate update,
+            string walletAddress
+        )
         {
-            var invoice = await _invoiceRepository.AsQueryable()
-                .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower() && i.Lock != null)
-                .FirstOrDefaultAsync() ?? throw new NotFoundException(ApiResultStatusCode.NotFound, "Locked invoice not found!");
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new BadRequestException("Wallet address is required.");
 
-            if (invoice.OwnerWallet.ToLower() != walletAddress.ToLower() &&
-                (string.IsNullOrWhiteSpace(invoice.PayerWallet) || invoice.PayerWallet.ToLower() != walletAddress.ToLower()) &&
-                (string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) || invoice.Lock.ApproverWallet.ToLower() != walletAddress.ToLower()))
+            var wallet = walletAddress.ToLower();
+            var query = _invoiceRepository
+                .AsQueryable()
+                .Where(i => i.Lock != null)
+                .Where(i =>
+                    i.Lock.ApproverWallet != null
+                    && (
+                        (i.PayerWallet != null && i.PayerWallet.ToLower() == wallet)
+                        || i.Lock.ApproverWallet.ToLower() == wallet
+                    )
+                );
+
+            if (update.Status == ApprovalStatus.Done)
             {
-                throw new BaseException(ApiResultStatusCode.Forbidden, "Access denied", System.Net.HttpStatusCode.Forbidden);
+                query = query.Where(i =>
+                    i.Lock.State == LockState.Approved
+                    || i.Lock.State == LockState.Released
+                    || i.Lock.State == LockState.Refunded
+                );
+            }
+            else
+            {
+                query = query.Where(i => i.Lock.State == LockState.Funded);
             }
 
-            var type = invoice.OwnerWallet.ToLower() == walletAddress.ToLower()
-               ? OwnershipType.Owner
-               : OwnershipType.Payer;
+            var totalCount = await query.CountAsync();
+            var pagination = update.Pagination;
+            var pageCount = (int)Math.Ceiling(totalCount / (double)pagination.Size);
 
-            if (invoice.Lock.State == LockState.Released || invoice.Lock.State == LockState.Refunded)
+            var invoices = await query
+                .OrderByDescending(i => i.CreatedMoment)
+                .Skip((pagination.Page - 1) * pagination.Size)
+                .Take(pagination.Size)
+                .ToListAsync();
+
+            var orderIds = invoices.Select(i => i.OrderId).Distinct().ToList();
+            var orders = await _orderRepository
+                .AsQueryable()
+                .Where(o => orderIds.Contains(o.OrderId))
+                .ToListAsync();
+
+            return new ApprovalListResult
             {
-                var isCallerAuthorizedApprover =
-                    (!string.IsNullOrWhiteSpace(invoice.PayerWallet) && invoice.PayerWallet.ToLower() == walletAddress.ToLower()) ||
-                    (!string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) && invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower());
+                TotalCount = totalCount,
+                PageCount = pageCount,
+                Data = invoices
+                    .Select(i =>
+                    {
+                        var result = ConvertToReslut(
+                            i,
+                            i.OwnerWallet.ToLower() == wallet
+                                ? OwnershipType.Owner
+                                : OwnershipType.Payer,
+                            walletAddress
+                        );
 
-                return ConvertToLockedInvoiceDetailResult(
+                        result.Type = orders
+                            .FirstOrDefault(o => o.OrderId.ToLower() == i.OrderId.ToLower())
+                            ?.Type;
+
+                        return result;
+                    })
+                    .ToList(),
+            };
+        }
+
+        public async Task<OrderFullResult> GetApprovalDetailAsync(
+            OrderIdUpdate update,
+            string walletAddress
+        )
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new BadRequestException("Wallet address is required.");
+
+            var order =
+                await _orderRepository
+                    .AsQueryable()
+                    .Where(q => q.State != OrderState.NotRegistered)
+                    .Where(o =>
+                        o.OrderId.ToLower() == update.OrderOrTransferId.ToLower()
+                        || o.TransferId.ToLower() == update.OrderOrTransferId.ToLower()
+                    )
+                    .FirstOrDefaultAsync()
+                ?? throw new NotFoundException(ApiResultStatusCode.NotFound, "Order not found!");
+
+            var invoices = await _invoiceRepository
+                .AsQueryable()
+                .Where(i => i.OrderId.ToLower() == order.OrderId.ToLower())
+                .Where(i => i.State != InvoiceState.NotRegistered)
+                .Where(i => i.Lock != null)
+                .ToListAsync();
+
+            if (!invoices.Any())
+                throw new NotFoundException(
+                    ApiResultStatusCode.NotFound,
+                    "Locked invoice not found!"
+                );
+
+            if (!invoices.Any(i => IsCallerAuthorizedApprover(i, walletAddress)))
+                throw new BaseException(
+                    ApiResultStatusCode.Forbidden,
+                    "Access denied",
+                    System.Net.HttpStatusCode.Forbidden
+                );
+
+            var type =
+                order.OwnerWallet.ToLower() == walletAddress.ToLower()
+                    ? OwnershipType.Owner
+                    : OwnershipType.Payer;
+
+            var invoiceResults = invoices
+                .Select(i => ConvertToReslut(i, type, walletAddress))
+                .ToList();
+
+            return ConvertToReslut(invoiceResults, order, type);
+        }
+
+        public async Task<ApprovalReportResult> GetApprovalReportAsync(string walletAddress)
+        {
+            if (string.IsNullOrWhiteSpace(walletAddress))
+                throw new BadRequestException("Wallet address is required.");
+
+            var wallet = walletAddress.ToLower();
+            var query = _invoiceRepository
+                .AsQueryable()
+                .Where(i => i.Lock != null)
+                .Where(i =>
+                    i.Lock.ApproverWallet != null
+                    && (
+                        (i.PayerWallet != null && i.PayerWallet.ToLower() == wallet)
+                        || i.Lock.ApproverWallet.ToLower() == wallet
+                    )
+                );
+
+            var pendingApprovalCount = await query
+                .Where(i => i.Lock.State == LockState.Funded)
+                .CountAsync();
+
+            var doneApprovalCount = await query
+                .Where(i =>
+                    i.Lock.State == LockState.Approved
+                    || i.Lock.State == LockState.Released
+                    || i.Lock.State == LockState.Refunded
+                )
+                .CountAsync();
+
+            var totalCount = pendingApprovalCount + doneApprovalCount;
+            var approvalProgress =
+                totalCount == 0 ? 0 : Math.Round((decimal)doneApprovalCount / totalCount * 100, 2);
+
+            return new ApprovalReportResult
+            {
+                PendingApprovalCount = pendingApprovalCount,
+                DoneApprovalCount = doneApprovalCount,
+                ApprovalProgress = approvalProgress,
+            };
+        }
+
+        private async Task<InvoiceResult> GetLockedInvoiceResultAsync(
+            Invoice invoice,
+            string walletAddress
+        )
+        {
+            var isOwner = invoice.OwnerWallet.ToLower() == walletAddress.ToLower();
+            var isCallerAuthorizedApprover = IsCallerAuthorizedApprover(invoice, walletAddress);
+
+            var type = isOwner ? OwnershipType.Owner : OwnershipType.Payer;
+
+            if (
+                invoice.Lock.State == LockState.Released
+                || invoice.Lock.State == LockState.Refunded
+            )
+            {
+                return ConvertToInvoiceDetailResult(
                     invoice,
                     type,
                     invoice.TokenAmountAtPayment ?? 0,
                     invoice.TokenAmountWeiAtPayment,
-                    isCallerAuthorizedApprover);
+                    isCallerAuthorizedApprover
+                );
             }
 
-            var chainInvoice = await _blockChainService.GetLockedInvoiceAsync(invoice.InvoiceId, invoice.TokenNetwork);
+            var chainInvoice = await _blockChainService.GetLockedInvoiceAsync(
+                invoice.InvoiceId,
+                invoice.TokenNetwork
+            );
             var tokenData = ValidateToken(invoice.TokenSymbol);
-            var principalAmount = _blockChainService.ConvertFromWei(chainInvoice.PayAmount, tokenData.PriceDecimalPlaces);
+            var principalAmount = _blockChainService.ConvertFromWei(
+                chainInvoice.PayAmount,
+                tokenData.PriceDecimalPlaces
+            );
             var principalAmountWei = chainInvoice.PayAmount.ToString();
-            var livePayoutPreview = _blockChainService.ConvertFromWei(chainInvoice.StakedPayout, tokenData.PriceDecimalPlaces);
+            var livePayoutPreview = _blockChainService.ConvertFromWei(
+                chainInvoice.StakedPayout,
+                tokenData.PriceDecimalPlaces
+            );
             var livePayoutPreviewWei = chainInvoice.StakedPayout.ToString();
-            var profitClaimed = _blockChainService.ConvertFromWei(chainInvoice.ProfitClaimed, tokenData.PriceDecimalPlaces);
+            var profitClaimed = _blockChainService.ConvertFromWei(
+                chainInvoice.ProfitClaimed,
+                tokenData.PriceDecimalPlaces
+            );
             var profitClaimedWei = chainInvoice.ProfitClaimed.ToString();
-            DateTime? lockedUntilMoment = chainInvoice.LockedUntil <= BigInteger.Zero
-                ? null
-                : DateTimeOffset.FromUnixTimeSeconds(checked((long)chainInvoice.LockedUntil)).UtcDateTime;
-            var payerWallet = string.IsNullOrWhiteSpace(invoice.PayerWallet)
-                ? (string.IsNullOrWhiteSpace(chainInvoice.Payer) || chainInvoice.Payer.ToLower() == ZeroAddress.ToLower()
+            DateTime? lockedUntilMoment =
+                chainInvoice.LockedUntil <= BigInteger.Zero
+                || chainInvoice.LockedUntil > MaxUnixSeconds
                     ? null
-                    : chainInvoice.Payer)
+                    : DateTimeOffset
+                        .FromUnixTimeSeconds((long)chainInvoice.LockedUntil)
+                        .UtcDateTime;
+            var payerWallet = string.IsNullOrWhiteSpace(invoice.PayerWallet)
+                ? (
+                    string.IsNullOrWhiteSpace(chainInvoice.Payer)
+                    || ZeroAddresses.Contains(chainInvoice.Payer.ToLower())
+                        ? null
+                        : chainInvoice.Payer
+                )
                 : invoice.PayerWallet;
 
-            var approverWallet = string.IsNullOrWhiteSpace(chainInvoice.Approver) || chainInvoice.Approver.ToLower() == ZeroAddress.ToLower()
-                ? null
-                : chainInvoice.Approver;
+            var approverWallet =
+                string.IsNullOrWhiteSpace(chainInvoice.Approver)
+                || ZeroAddresses.Contains(chainInvoice.Approver.ToLower())
+                    ? invoice.Lock.ApproverWallet
+                    : chainInvoice.Approver;
 
             invoice.Lock.LivePayoutPreview = livePayoutPreview;
             invoice.Lock.LivePayoutPreviewWei = livePayoutPreviewWei;
@@ -1165,18 +1641,28 @@ namespace SLT.Services._Order
 
             await _invoiceRepository.ReplaceOneAsync(invoice);
 
-            var isCallerAuthorizedApproverLive =
-                (!string.IsNullOrWhiteSpace(payerWallet) && payerWallet.ToLower() == walletAddress.ToLower()) ||
-                (!string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet) && invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower());
+            var isCallerAuthorizedApproverLive = IsCallerAuthorizedApprover(invoice, walletAddress);
 
-            return ConvertToLockedInvoiceDetailResult(
+            return ConvertToInvoiceDetailResult(
                 invoice,
                 type,
                 principalAmount,
                 principalAmountWei,
-                isCallerAuthorizedApproverLive);
+                isCallerAuthorizedApproverLive
+            );
         }
 
+        private static bool IsCallerAuthorizedApprover(Invoice invoice, string walletAddress)
+        {
+            return !string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet)
+                && (
+                    (
+                        !string.IsNullOrWhiteSpace(invoice.PayerWallet)
+                        && invoice.PayerWallet.ToLower() == walletAddress.ToLower()
+                    )
+                    || invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower()
+                );
+        }
 
         /// <summary>
         /// use for seen wallet
@@ -1187,18 +1673,24 @@ namespace SLT.Services._Order
         /// <exception cref="NotFoundException"></exception>
         public async Task<bool> SeenWalletAsync(InvoiceIdUpdate update, string walletAddress)
         {
-            var invoice = await _invoiceRepository.AsQueryable()
-                .Where(q => q.State != InvoiceState.NotRegistered)
-                .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
-                .FirstOrDefaultAsync() ?? throw new NotFoundException("Invoice not found!");
+            var invoice =
+                await _invoiceRepository
+                    .AsQueryable()
+                    .Where(q => q.State != InvoiceState.NotRegistered)
+                    .Where(i => i.InvoiceId.ToLower() == update.InvoiceId.ToLower())
+                    .FirstOrDefaultAsync()
+                ?? throw new NotFoundException("Invoice not found!");
 
             if (invoice.OwnerWallet.ToLower() == walletAddress.ToLower())
                 throw new BadRequestException("You are Owner of this invoice!");
 
-            var order = await _orderRepository.AsQueryable()
-                .Where(o => o.State != OrderState.NotRegistered)
-                .Where(o => o.OrderId.ToLower() == invoice.OrderId.ToLower())
-                .FirstOrDefaultAsync() ?? throw new NotFoundException("Order not found!");
+            var order =
+                await _orderRepository
+                    .AsQueryable()
+                    .Where(o => o.State != OrderState.NotRegistered)
+                    .Where(o => o.OrderId.ToLower() == invoice.OrderId.ToLower())
+                    .FirstOrDefaultAsync()
+                ?? throw new NotFoundException("Order not found!");
 
             if (order.OwnerWallet.ToLower() == walletAddress.ToLower())
                 throw new BadRequestException("You are Owner of this Order!");
@@ -1211,19 +1703,13 @@ namespace SLT.Services._Order
             return true;
         }
 
-
         public async Task<OrderTotalReportResult> GetTotalReportAsync(string walletAddress)
         {
             var ownerData = await GetOwnerOrderReportAsync(walletAddress);
             var paterData = await GetPayerOrderReportAsync(walletAddress);
 
-            return new OrderTotalReportResult
-            {
-                OwnerReport = ownerData,
-                PayerReport = paterData
-            };
+            return new OrderTotalReportResult { OwnerReport = ownerData, PayerReport = paterData };
         }
-
 
         /// <summary>
         /// use for get report
@@ -1236,7 +1722,8 @@ namespace SLT.Services._Order
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new ArgumentException("Wallet address is invalid.");
 
-            var orders = await _orderRepository.AsQueryable()
+            var orders = await _orderRepository
+                .AsQueryable()
                 .Where(o => o.State != OrderState.NotRegistered)
                 .Where(o => o.OwnerWallet.ToLower() == walletAddress.ToLower())
                 .ToListAsync();
@@ -1245,9 +1732,8 @@ namespace SLT.Services._Order
             var doneOrders = orders.Count(o => o.State == OrderState.Completed);
             var totalOrders = orders.Count();
 
-            var orderProgress = totalOrders == 0
-                ? 0
-                : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
+            var orderProgress =
+                totalOrders == 0 ? 0 : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
 
             //var invoices = await _invoiceRepository.AsQueryable()
             //    .Where(i => i.OwnerWallet.ToLower() == walletAddress.ToLower())
@@ -1280,7 +1766,8 @@ namespace SLT.Services._Order
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new ArgumentException("Wallet address is invalid.");
 
-            var orders = await _orderRepository.AsQueryable()
+            var orders = await _orderRepository
+                .AsQueryable()
                 .Where(o => o.State != OrderState.NotRegistered)
                 .Where(o => o.SeenBy.Contains(walletAddress.ToLower()))
                 .ToListAsync();
@@ -1291,9 +1778,8 @@ namespace SLT.Services._Order
             var doneOrders = orders.Count(o => o.State == OrderState.Completed);
             var totalOrders = orders.Count();
 
-            var orderProgress = totalOrders == 0
-                ? 0
-                : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
+            var orderProgress =
+                totalOrders == 0 ? 0 : Math.Round((decimal)doneOrders / totalOrders * 100, 2);
 
             //var invoices = await _invoiceRepository.AsQueryable()
             //    .Where(i => orderids.Contains(i.OrderId))
@@ -1321,9 +1807,6 @@ namespace SLT.Services._Order
             };
         }
 
-
-
-
         /// <summary>
         /// use for remove peding order with invoices
         /// </summary>
@@ -1334,30 +1817,35 @@ namespace SLT.Services._Order
         /// <exception cref="NotFoundException"></exception>
         /// <exception cref="BadRequestException"></exception>
         public async Task<string> DeletePendingOrderAsync(
-        DeletePendingOrderUpdate update,
-        string walletAddress)
+            DeletePendingOrderUpdate update,
+            string walletAddress
+        )
         {
             if (string.IsNullOrWhiteSpace(walletAddress))
                 throw new ArgumentException("Wallet address is invalid.");
 
-            var order = await _orderRepository.AsQueryable()
-                .Where(o => o.State != OrderState.NotRegistered)
-                .Where(o =>
-                    o.OwnerWallet.ToLower() == walletAddress.ToLower() &&
-                    o.OrderId == update.OrderId)
-                .FirstOrDefaultAsync()
+            var order =
+                await _orderRepository
+                    .AsQueryable()
+                    .Where(o => o.State != OrderState.NotRegistered)
+                    .Where(o =>
+                        o.OwnerWallet.ToLower() == walletAddress.ToLower()
+                        && o.OrderId == update.OrderId
+                    )
+                    .FirstOrDefaultAsync()
                 ?? throw new NotFoundException("Order Not Found!");
 
             if (order.State != OrderState.Pending)
                 throw new BadRequestException("Can not remove completed order");
 
-            var invoices = await _invoiceRepository.AsQueryable()
+            var invoices = await _invoiceRepository
+                .AsQueryable()
                 .Where(i =>
-                    i.State != InvoiceState.NotRegistered &&
-                    i.OwnerWallet.ToLower() == walletAddress.ToLower() &&
-                    i.OrderId == update.OrderId)
+                    i.State != InvoiceState.NotRegistered
+                    && i.OwnerWallet.ToLower() == walletAddress.ToLower()
+                    && i.OrderId == update.OrderId
+                )
                 .ToListAsync();
-
 
             if (invoices.Count == 0)
                 throw new BadRequestException("There is no invoice in order");
@@ -1382,12 +1870,10 @@ namespace SLT.Services._Order
             if (string.IsNullOrEmpty(txHash))
                 throw new BadRequestException("Blockchain transaction failed");
 
-            var filterdb = Builders<Invoice>.Filter.In(
-            i => i.InvoiceId,
-            invoiceIds);
+            var filterdb = Builders<Invoice>.Filter.In(i => i.InvoiceId, invoiceIds);
 
-            var updatedb = Builders<Invoice>.Update
-                .Set(i => i.IsDeleted, true)
+            var updatedb = Builders<Invoice>
+                .Update.Set(i => i.IsDeleted, true)
                 .Set(i => i.RemoveHash, txHash)
                 .Set(i => i.DeletedMoment, DateTime.UtcNow);
 
@@ -1397,7 +1883,8 @@ namespace SLT.Services._Order
             _logger.LogInformation(
                 "Pending order deleted successfully. OrderId: {OrderId}, TxHash: {TxHash}",
                 update.OrderId,
-                txHash);
+                txHash
+            );
 
             return order.OrderId;
         }
@@ -1407,10 +1894,15 @@ namespace SLT.Services._Order
             if (!lockDurationMonths.HasValue)
                 throw new BadRequestException("Lock duration is required for locked invoices.");
 
-            if (!_lockedInvoiceSettings.AllowedLockDurationsMonths
-                .Any(d => d == lockDurationMonths.Value))
+            if (
+                !_lockedInvoiceSettings.AllowedLockDurationsMonths.Any(d =>
+                    d == lockDurationMonths.Value
+                )
+            )
             {
-                throw new BadRequestException("Lock duration must be one of 1, 3, 6, 12, 18, or 24 months.");
+                throw new BadRequestException(
+                    "Lock duration must be one of 1, 3, 6, 12, 18, or 24 months."
+                );
             }
 
             return lockDurationMonths.Value;
@@ -1424,8 +1916,10 @@ namespace SLT.Services._Order
             var approverWallet = thirdPartyApprover.Trim();
             var addressUtil = AddressUtil.Current;
 
-            if (!addressUtil.IsValidAddressLength(approverWallet) ||
-                !addressUtil.IsValidEthereumAddressHexFormat(approverWallet))
+            if (
+                !addressUtil.IsValidAddressLength(approverWallet)
+                || !addressUtil.IsValidEthereumAddressHexFormat(approverWallet)
+            )
                 throw new BadRequestException("Third party approver must be a valid EVM address.");
 
             if (!addressUtil.IsChecksumAddress(approverWallet))
@@ -1434,13 +1928,17 @@ namespace SLT.Services._Order
             if (approverWallet.ToLower() == ownerWallet.ToLower())
                 throw new BadRequestException("Third party approver cannot be the invoice owner.");
 
-            if (approverWallet.ToLower() == ZeroAddress.ToLower())
+            if (ZeroAddresses.Contains(approverWallet.ToLower()))
                 throw new BadRequestException("Third party approver cannot be the zero address.");
 
             return approverWallet;
         }
 
-        private static LockDetail CreateLockDetail(bool isLocked, int lockDurationMonths, string approverWallet)
+        private static LockDetail CreateLockDetail(
+            bool isLocked,
+            int lockDurationMonths,
+            string approverWallet
+        )
         {
             if (!isLocked)
                 return null;
@@ -1449,11 +1947,14 @@ namespace SLT.Services._Order
             {
                 DurationMonths = lockDurationMonths,
                 ApproverWallet = approverWallet,
-                State = LockState.Created
+                State = LockState.Created,
             };
         }
 
-        private static string ValidateNormalInvoiceHasNoLockFields(int? lockDurationMonths, string thirdPartyApprover)
+        private static string ValidateNormalInvoiceHasNoLockFields(
+            int? lockDurationMonths,
+            string thirdPartyApprover
+        )
         {
             if (lockDurationMonths.HasValue || !string.IsNullOrWhiteSpace(thirdPartyApprover))
                 throw new BadRequestException("Lock fields are only valid for locked invoices.");
@@ -1461,10 +1962,14 @@ namespace SLT.Services._Order
             return null;
         }
 
-        private static string ValidateNormalMultiStepOrderHasNoLockFields(CreateMultiStepOrderUpdate update)
+        private static string ValidateNormalMultiStepOrderHasNoLockFields(
+            CreateMultiStepOrderUpdate update
+        )
         {
             if (!string.IsNullOrWhiteSpace(update.ThirdPartyApprover))
-                throw new BadRequestException("Third party approver is only valid for locked orders.");
+                throw new BadRequestException(
+                    "Third party approver is only valid for locked orders."
+                );
 
             if (update.Invoices.Any(i => i.LockDurationMonths.HasValue))
                 throw new BadRequestException("Lock duration is only valid for locked orders.");
@@ -1472,16 +1977,16 @@ namespace SLT.Services._Order
             return null;
         }
 
-
-
-
-
         /// <summary>
         /// use for convert to result
         /// </summary>
         /// <param name="invoice"></param>
         /// <returns></returns>
-        private InvoiceResult ConvertToReslut(Invoice invoice, OwnershipType type)
+        private InvoiceResult ConvertToReslut(
+            Invoice invoice,
+            OwnershipType type,
+            string walletAddress = null
+        )
         {
             return new InvoiceResult
             {
@@ -1508,19 +2013,43 @@ namespace SLT.Services._Order
                 IsLocked = invoice.Lock != null,
                 LockDurationMonths = invoice.Lock?.DurationMonths,
                 ApproverWallet = invoice.Lock?.ApproverWallet,
-                OwnershipType = type
+                OwnershipType = type,
+                LockState = invoice.Lock?.State,
+                LockedUntilMoment = invoice.Lock?.LockedUntilMoment,
+                ApprovedMoment = invoice.Lock?.ApprovedMoment,
+                ApprovedBy = invoice.Lock?.ApprovedBy,
+                ApproveHash = invoice.Lock?.ApproveHash,
+                BeneficiaryWallet = invoice.Lock?.BeneficiaryWallet,
+                ResolveHash = invoice.Lock?.ResolveHash,
+                StakedPayout = invoice.Lock?.StakedPayout,
+                StakedPayoutWei = invoice.Lock?.StakedPayoutWei,
+                FeeAmount = invoice.Lock?.FeeAmount,
+                FeeAmountWei = invoice.Lock?.FeeAmountWei,
+                PrincipalAmount = invoice.Lock == null ? null : invoice.TokenAmountAtPayment,
+                PrincipalAmountWei = invoice.Lock == null ? null : invoice.TokenAmountWeiAtPayment,
+                LivePayoutPreview = invoice.Lock?.LivePayoutPreview,
+                LivePayoutPreviewWei = invoice.Lock?.LivePayoutPreviewWei,
+                ProfitClaimed = invoice.Lock?.ProfitClaimed,
+                ProfitClaimedWei = invoice.Lock?.ProfitClaimedWei,
+                MonthlyProfitPercent = GetMonthlyProfitPercent(invoice),
+                Approved = invoice.Lock?.Approved,
+                Settled = invoice.Lock?.Settled,
+                IsCallerAuthorizedApprover =
+                    invoice.Lock == null || string.IsNullOrWhiteSpace(walletAddress)
+                        ? null
+                        : IsCallerAuthorizedApprover(invoice, walletAddress),
             };
-
         }
 
-        private LockedInvoiceDetailResult ConvertToLockedInvoiceDetailResult(
+        private InvoiceResult ConvertToInvoiceDetailResult(
             Invoice invoice,
             OwnershipType type,
             decimal principalAmount,
             string principalAmountWei,
-            bool isCallerAuthorizedApprover)
+            bool isCallerAuthorizedApprover
+        )
         {
-            return new LockedInvoiceDetailResult
+            return new InvoiceResult
             {
                 CreatedMoment = invoice.CreatedMoment,
                 ModifiedMoment = invoice.ModifiedMoment,
@@ -1563,10 +2092,21 @@ namespace SLT.Services._Order
                 LivePayoutPreviewWei = invoice.Lock.LivePayoutPreviewWei,
                 ProfitClaimed = invoice.Lock.ProfitClaimed,
                 ProfitClaimedWei = invoice.Lock.ProfitClaimedWei,
+                MonthlyProfitPercent = GetMonthlyProfitPercent(invoice),
                 Approved = invoice.Lock.Approved,
                 Settled = invoice.Lock.Settled,
-                IsCallerAuthorizedApprover = isCallerAuthorizedApprover
+                IsCallerAuthorizedApprover = isCallerAuthorizedApprover,
             };
+        }
+
+        private decimal? GetMonthlyProfitPercent(Invoice invoice)
+        {
+            if (invoice.Lock == null)
+                return null;
+
+            return _stakeSetting
+                .Plans.FirstOrDefault(p => p.DurationInMonths == invoice.Lock.DurationMonths)
+                ?.MonthlyProfitPercent;
         }
 
         ///// <summary>
@@ -1604,15 +2144,17 @@ namespace SLT.Services._Order
 
         //}
 
-
-
         /// <summary>
         /// use for convert to result
         /// </summary>
         /// <param name="invoiceResults"></param>
         /// <param name="order"></param>
         /// <returns></returns>
-        private OrderFullResult ConvertToReslut(List<InvoiceResult> invoiceResults, Order order, OwnershipType type)
+        private OrderFullResult ConvertToReslut(
+            List<InvoiceResult> invoiceResults,
+            Order order,
+            OwnershipType type
+        )
         {
             return new OrderFullResult
             {
@@ -1629,11 +2171,10 @@ namespace SLT.Services._Order
                 PaymentDay = order.PaymentDay,
                 TransferId = order.TransferId,
                 Invoices = invoiceResults,
-                OwnershipType = type
+                OwnershipType = type,
+                IsLocked = invoiceResults.Any(i => i.IsLocked) ? true : null,
             };
         }
-
-
 
         /// <summary>
         /// use for validate token
@@ -1643,25 +2184,21 @@ namespace SLT.Services._Order
         /// <exception cref="BadRequestException"></exception>
         private AvailableTokenData ValidateToken(string tokenName)
         {
-            var tokenData = _availableTokenSetting.FirstOrDefault(q => q.Name.ToLower() == tokenName.ToLower())
+            var tokenData =
+                _availableTokenSetting.FirstOrDefault(q => q.Name.ToLower() == tokenName.ToLower())
                 ?? throw new BadRequestException($"Unsupported token name! {tokenName}");
             return tokenData;
         }
-
 
         public static string GenerateBytes32HexId()
         {
             var buffer = new byte[32];
             RandomNumberGenerator.Fill(buffer);
 
-            var newId = BitConverter.ToString(buffer)
-                .Replace("-", "")
-                .ToLowerInvariant();
+            var newId = BitConverter.ToString(buffer).Replace("-", "").ToLowerInvariant();
 
             return newId;
         }
-
-
     }
 }
 
@@ -1688,7 +2225,6 @@ namespace SLT.Services._Order
 
 //    };
 
-
 //    await _orderRepository.InsertOneAsync(newOrder);
 //    try
 //    {
@@ -1702,7 +2238,6 @@ namespace SLT.Services._Order
 //        throw new BadRequestException("Please try later!");
 //    }
 //}
-
 
 ///// <summary>
 ///// use for create multi step order
@@ -1803,7 +2338,6 @@ namespace SLT.Services._Order
 //    await _invoiceRepository.InsertOneAsync(newInvoice);
 //    return ConvertToReslut(newInvoice, OwnershipType.Owner);
 //}
-
 
 ///// <summary>
 ///// use for create multi step invoices
