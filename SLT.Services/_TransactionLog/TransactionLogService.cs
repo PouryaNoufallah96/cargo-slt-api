@@ -455,20 +455,34 @@ namespace SLT.Services._TransactionLog
                     try
                     {
                         var shortInvoiceId = log.InvoiceId.Length > 10 ? log.InvoiceId[..10] : log.InvoiceId;
-                        var transition = syncResult.LockState == LockState.Refunded ? "refunded" : "released";
+                        var transition = string.IsNullOrWhiteSpace(syncResult.ResolvedAction)
+                            ? (syncResult.LockState == LockState.Refunded ? "refunded" : "released")
+                            : syncResult.ResolvedAction;
+                        var message = string.IsNullOrWhiteSpace(syncResult.NotificationMessage)
+                            ? $"Locked invoice {shortInvoiceId} {transition}."
+                            : syncResult.NotificationMessage;
 
                         if (!string.IsNullOrWhiteSpace(syncResult.OwnerWallet))
-                            await _hubContext.Clients.Group(syncResult.OwnerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
+                            await _hubContext.Clients.Group(syncResult.OwnerWallet).SendAsync("PaymentMessage", message);
 
                         if (!string.IsNullOrWhiteSpace(syncResult.PayerWallet))
-                            await _hubContext.Clients.Group(syncResult.PayerWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
+                            await _hubContext.Clients.Group(syncResult.PayerWallet).SendAsync("PaymentMessage", message);
 
                         if (!string.IsNullOrWhiteSpace(syncResult.BeneficiaryWallet))
-                            await _hubContext.Clients.Group(syncResult.BeneficiaryWallet).SendAsync("PaymentMessage", $"Locked invoice {shortInvoiceId} {transition}.");
+                            await _hubContext.Clients.Group(syncResult.BeneficiaryWallet).SendAsync("PaymentMessage", message);
                     }
                     catch (Exception)
                     {
                         _logger.LogError("Failed to send payment notification for InvoiceId {InvoiceId}.", log.InvoiceId);
+                    }
+
+                    try
+                    {
+                        await NotifyLockedInvoiceResolvedAsync(syncResult);
+                    }
+                    catch (Exception)
+                    {
+                        _logger.LogError("Failed to send locked invoice resolved notification for InvoiceId {InvoiceId}.", log.InvoiceId);
                     }
                 }
             }
@@ -720,6 +734,23 @@ namespace SLT.Services._TransactionLog
 
         #endregion
 
+
+        private async Task NotifyLockedInvoiceResolvedAsync(LockedInvoiceSyncResult syncResult)
+        {
+            var wallets = new[]
+                {
+                    syncResult.OwnerWallet,
+                    syncResult.PayerWallet,
+                    syncResult.BeneficiaryWallet
+                }
+                .Where(wallet => !string.IsNullOrWhiteSpace(wallet))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var wallet in wallets)
+            {
+                await _hubContext.Clients.Group(wallet).SendAsync("LockedInvoiceResolved", syncResult);
+            }
+        }
 
         private string SerializeData<T>(T input)
         {
