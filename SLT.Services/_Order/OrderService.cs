@@ -44,7 +44,8 @@ namespace SLT.Services._Order
 
         // Max unix seconds DateTimeOffset.FromUnixTimeSeconds accepts (year 9999); unfunded locked invoices return a huge sentinel lockedUntil.
         // (9999-01-01T00:00:00Z to 9999-12-31T23:59:59Z): 3652058 days * 24 * 60 * 60 - 1
-        private const long MaxUnixSeconds = (9999L * 365 + 24 /* leap years */ - 719162 /* epoch offset */) * 24 * 60 * 60 - 1; // 253402300799
+        private const long MaxUnixSeconds =
+            (9999L * 365 + 24 /* leap years */ - 719162 /* epoch offset */) * 24 * 60 * 60 - 1; // 253402300799
 
         // 30 days * 24 hours * 60 minutes * 60 seconds = seconds in a 30-day month
         private const long SecondsPerMonth = 30 * 24 * 60 * 60; // 2,592,000
@@ -330,16 +331,18 @@ namespace SLT.Services._Order
 
         public async Task RemoveNotRegisteredOrdersAsync()
         {
+            var oneWeekAgo = DateTime.UtcNow.AddDays(-7);
+
             var orders = await _orderRepository
                 .AsQueryable()
-                .Where(o => o.State == OrderState.NotRegistered)
+                .Where(o =>
+                    o.State == OrderState.NotRegistered &&
+                    o.CreatedMoment <= oneWeekAgo)
                 .Take(10)
                 .ToListAsync();
 
             if (!orders.Any())
                 return;
-
-            var orderIds = orders.Select(o => o.OrderId).ToList();
 
             foreach (var order in orders)
             {
@@ -1655,13 +1658,13 @@ namespace SLT.Services._Order
         private static bool IsCallerAuthorizedApprover(Invoice invoice, string walletAddress)
         {
             return !string.IsNullOrWhiteSpace(invoice.Lock.ApproverWallet)
-                && (
-                    (
-                        !string.IsNullOrWhiteSpace(invoice.PayerWallet)
-                        && invoice.PayerWallet.ToLower() == walletAddress.ToLower()
-                    )
-                    || invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower()
-                );
+                   && (
+                       (
+                           !string.IsNullOrWhiteSpace(invoice.PayerWallet)
+                           && invoice.PayerWallet.ToLower() == walletAddress.ToLower()
+                       )
+                       || invoice.Lock.ApproverWallet.ToLower() == walletAddress.ToLower()
+                   );
         }
 
         /// <summary>
@@ -1850,7 +1853,9 @@ namespace SLT.Services._Order
             if (invoices.Count == 0)
                 throw new BadRequestException("There is no invoice in order");
 
-            if (invoices.Any(i => i.State != InvoiceState.Pending))
+            if (invoices.Any(i => (
+                    i.Lock == null && i.State != InvoiceState.Pending
+                ) || (i.Lock is not null && i.Lock.State != LockState.Created)))
                 throw new BadRequestException("There is paid invoice in order");
 
             var invoiceIds = invoices.Select(q => q.InvoiceId).ToList();
