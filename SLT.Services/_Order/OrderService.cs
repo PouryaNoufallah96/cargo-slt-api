@@ -47,8 +47,10 @@ namespace SLT.Services._Order
         private const long MaxUnixSeconds =
             (9999L * 365 + 24 /* leap years */ - 719162 /* epoch offset */) * 24 * 60 * 60 - 1; // 253402300799
 
-        // 30 days * 24 hours * 60 minutes * 60 seconds = seconds in a 30-day month
-        private const long SecondsPerMonth = 30 * 24 * 60 * 60; // 2,592,000
+        // Production scale: 30 days * 24 hours * 60 minutes * 60 seconds = 2,592,000
+        // private const long SecondsPerMonth = 30 * 24 * 60 * 60;
+        // Dev-test contracts use 1 minute as 1 lock month.
+        private const long SecondsPerMonth = 60;
 
         /// <summary>
         /// use for create quick order
@@ -1103,9 +1105,12 @@ namespace SLT.Services._Order
                 _logger.LogError(e.Message);
             }
 
+            var resolvedAction = targetLockState == LockState.Refunded ? "refunded" : "released";
+            var notificationMessage = $"Locked invoice {updatedInvoice.InvoiceId} has been {resolvedAction}.";
+
             _logger.LogInformation(
                 "Sync LockedInvoiceResolved applied: {Outcome} | InvoiceId: {InvoiceId}, OrderId: {OrderId}, InvoiceState: {InvoiceState}, LockState: {LockState}, Beneficiary: {Beneficiary}, Hash: {Hash}",
-                released ? "released to owner" : "refunded to payer",
+                resolvedAction == "released" ? "released to owner" : "refunded to payer",
                 updatedInvoice.InvoiceId,
                 updatedInvoice.OrderId,
                 targetInvoiceState,
@@ -1124,6 +1129,14 @@ namespace SLT.Services._Order
                 BeneficiaryWallet = log.Beneficiary,
                 LockState = targetLockState,
                 InvoiceState = targetInvoiceState,
+                ResolveHash = updatedInvoice.Lock.ResolveHash,
+                ResolvedAction = resolvedAction,
+                NotificationMessage = notificationMessage,
+                StakedPayout = updatedInvoice.Lock.StakedPayout,
+                StakedPayoutWei = updatedInvoice.Lock.StakedPayoutWei,
+                FeeAmount = updatedInvoice.Lock.FeeAmount,
+                FeeAmountWei = updatedInvoice.Lock.FeeAmountWei,
+                Settled = updatedInvoice.Lock.Settled,
             };
         }
 
