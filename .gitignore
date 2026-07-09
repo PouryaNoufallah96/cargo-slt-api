@@ -355,3 +355,5 @@ docs/goals/
 # macOS Finder metadata
 .DS_Store
 **/.DS_Store
+
+global.json
