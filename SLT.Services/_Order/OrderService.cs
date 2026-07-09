@@ -1052,7 +1052,11 @@ namespace SLT.Services._Order
                 tokenData.PriceDecimalPlaces
             );
 
-            var filter = Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId);
+            var filter = Builders<Invoice>.Filter.And(
+                Builders<Invoice>.Filter.Eq(x => x.InvoiceId, invoice.InvoiceId),
+                Builders<Invoice>.Filter.Ne(x => x.Lock.State, LockState.Released),
+                Builders<Invoice>.Filter.Ne(x => x.Lock.State, LockState.Refunded)
+            );
 
             var update = Builders<Invoice>
                 .Update.Set(x => x.State, targetInvoiceState)
