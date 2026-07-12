@@ -1411,7 +1411,7 @@ namespace SLT.Services._Order
                 ?? throw new NotFoundException("Invoice not found!");
 
             if (invoice.State == InvoiceState.NotRegistered)
-                throw new NotFoundException("Please try again in a few minutes!");
+                throw new BadRequestException("Please try again in a few minutes!");
 
             if (invoice.Lock != null)
                 return await GetLockedInvoiceResultAsync(invoice, walletAddress);
