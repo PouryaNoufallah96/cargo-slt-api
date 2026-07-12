@@ -47,10 +47,10 @@ namespace SLT.Services._Order
         private const long MaxUnixSeconds =
             (9999L * 365 + 24 /* leap years */ - 719162 /* epoch offset */) * 24 * 60 * 60 - 1; // 253402300799
 
-        // Production scale: 30 days * 24 hours * 60 minutes * 60 seconds = 2,592,000
-        // private const long SecondsPerMonth = 30 * 24 * 60 * 60;
         // Dev-test contracts use 1 minute as 1 lock month.
-        private const long SecondsPerMonth = 60;
+        // private const long SecondsPerMonth = 60;
+        // 30 days * 24 hours * 60 minutes * 60 seconds = seconds in a 30-day month
+        private const long SecondsPerMonth = 30 * 24 * 60 * 60; // 2,592,000
 
         /// <summary>
         /// use for create quick order
