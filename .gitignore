@@ -177,6 +177,7 @@ publish/
 # but database connection strings (with potential passwords) will be unencrypted
 *.pubxml
 *.publishproj
+temp_auto_push.bat
 
 # Microsoft Azure Web App publish settings. Comment the next line if you want to
 # checkin your Azure Web App publish settings, but sensitive information contained
@@ -357,3 +358,4 @@ docs/goals/
 **/.DS_Store
 
 global.json
+branch_structure.json
