@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 set -e
 
-# Zero-downtime-on-failure deploy (same pattern as rzprime/frontend/app/setup.sh):
-# publish + build a new image while the live container keeps serving, boot it as
-# a throwaway canary via a docker-compose override (reuses the same .env-driven
-# environment as the real service - just on a private name/port), health-check
-# it, and only then swap it into the live container. A bad publish/build/boot
-# leaves production untouched - the job just fails.
+# Zero-downtime-on-failure deploy (same pattern as cargo/frontend/app's deploy.sh):
+# build a new image while the live container keeps serving, boot it as a throwaway
+# canary via plain `docker run` (not `docker-compose up`), health-check it, and
+# only then swap it into the live container. A bad publish/build/boot leaves
+# production untouched - the job just fails.
+#
+# Canary/swap use `docker run`, not `docker-compose up`: compose matches an
+# existing container by project+service label regardless of container_name
+# overrides, and this project already had a container left renamed
+# `<id>_api.sltcargopay.com` from an earlier failed compose recreate (the same
+# v1.29.2 "recreate in place" bug class documented in infra/ci/deploy.yml) -
+# compose kept trying to recreate that zombie (pointing at a since-deleted
+# image) instead of creating the canary fresh. `docker-compose config` is still
+# used once, only to resolve docker-compose.yml's .env-interpolated
+# `environment:` block into plain `docker run --env-file` lines - compose
+# itself never creates or touches a container.
 
 SERVICE="api.sltcargopay.com"
 IMAGE_NAME="slt.api"
@@ -14,10 +24,12 @@ LIVE_NAME="api.sltcargopay.com"
 CANARY_NAME="${LIVE_NAME}_canary"
 CANARY_PORT="13009"
 INTERNAL_PORT="80"
+LIVE_PORT="3009"
 
+ENV_FILE=""
 cleanup_canary() {
   docker rm -f "$CANARY_NAME" >/dev/null 2>&1 || true
-  rm -f docker-compose.canary.yml
+  [ -n "$ENV_FILE" ] && rm -f "$ENV_FILE"
 }
 trap cleanup_canary EXIT
 
@@ -30,16 +42,26 @@ dotnet publish SLT.Api/SLT.Api.csproj -c Release -o publish
 echo "Building new image (production container keeps serving)..."
 docker build -t "$IMAGE_NAME" .
 
+echo "Resolving environment from docker-compose.yml + .env..."
+ENV_FILE=$(mktemp)
+docker-compose config | python3 -c "
+import sys, yaml
+d = yaml.safe_load(sys.stdin)
+env = d['services']['${SERVICE}']['environment']
+items = env.items() if isinstance(env, dict) else (e.split('=', 1) for e in env)
+for k, v in items:
+    print(f'{k}={v}')
+" > "$ENV_FILE"
+
 echo "Starting canary on 127.0.0.1:${CANARY_PORT} for a health check..."
-cleanup_canary
-cat > docker-compose.canary.yml <<CANARYEOF
-services:
-  ${SERVICE}:
-    container_name: ${CANARY_NAME}
-    ports:
-      - "127.0.0.1:${CANARY_PORT}:${INTERNAL_PORT}"
-CANARYEOF
-docker-compose -f docker-compose.yml -f docker-compose.canary.yml up -d --no-deps "$SERVICE"
+cleanup_canary_container_only() { docker rm -f "$CANARY_NAME" >/dev/null 2>&1 || true; }
+cleanup_canary_container_only
+docker run -d --name "$CANARY_NAME" \
+  --env-file "$ENV_FILE" \
+  -v /etc/timezone:/etc/timezone:ro \
+  -v /etc/localtime:/etc/localtime:ro \
+  -p "127.0.0.1:${CANARY_PORT}:${INTERNAL_PORT}" \
+  "$IMAGE_NAME"
 
 echo "Health-checking canary..."
 ok=0
@@ -61,8 +83,13 @@ fi
 
 echo "Canary healthy - swapping into production (brief blip)..."
 docker ps -aq --filter "name=${LIVE_NAME}" | xargs -r docker rm -f >/dev/null 2>&1 || true
-cleanup_canary
-docker-compose up -d
+cleanup_canary_container_only
+docker run -d --name "$LIVE_NAME" --restart unless-stopped \
+  --env-file "$ENV_FILE" \
+  -v /etc/timezone:/etc/timezone:ro \
+  -v /etc/localtime:/etc/localtime:ro \
+  -p "127.0.0.1:${LIVE_PORT}:${INTERNAL_PORT}" \
+  "$IMAGE_NAME"
 
 echo "Container status:"
-docker-compose ps
+docker ps --filter "name=${LIVE_NAME}"
