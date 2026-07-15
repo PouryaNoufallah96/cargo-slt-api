@@ -22,7 +22,9 @@ cleanup_canary() {
 trap cleanup_canary EXIT
 
 echo "Publishing..."
-dotnet build SLT.Api/SLT.Api.csproj -c Release
+# dotnet publish builds internally - a separate `dotnet build` beforehand races it
+# for the same obj/ files (MSBuild node reuse keeps handles open), causing
+# IOException: process cannot access SLT.Utilities.dll.
 dotnet publish SLT.Api/SLT.Api.csproj -c Release -o publish
 
 echo "Building new image (production container keeps serving)..."
