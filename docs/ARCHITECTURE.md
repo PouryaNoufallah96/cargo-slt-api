@@ -88,6 +88,16 @@ approver null and approval endpoints do not list the invoice; `LockedInvoiceReso
 `Nethereum.Signer.EthereumMessageSigner` +
 `Nethereum.Util.AddressUtil`.
 
+**Event ingest invariant (load-bearing):** every decoded contract event is persisted to
+`TransactionLog` immediately; the only gate is duplicate detection. Do not put business
+conditions or cross-event cursor queries inside handlers (e.g. do not call
+`EnsureInvoiceEventCursorIncludesLockedEventsAsync` /
+`GetCombinedInvoiceEventLastCheckedBlockNumberAsync`). Last-block tracking is **Create-only**:
+advance the in-memory cursor in `InvoiceCreated` / `LockedInvoiceCreated` handlers; resume from
+DB via `GetInvoiceLastCheckedBlockNumberAsync` (Create events only). Paid / Approved / Resolved
+(and polling of those types) still run and rely on dedup — they must not advance the last-block
+cursor. Raw events are the recovery source if sync/business logic fails later.
+
 ## DI
 
 Autofac with marker-interface scanning (`IScopedDependency`, `ISingletonDependency`,

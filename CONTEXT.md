@@ -47,7 +47,9 @@ _Avoid_: login, OAuth
 **BEP20** (BSC, ChainId 56) or **ERC20** (Ethereum). No TRC20.
 
 **TransactionLog**:
-Persisted on-chain log plus last-checked block per network.
+Persisted on-chain log plus last-checked block per network. Ingest is persist-first (duplicate
+check only). Last-block / resume cursor is Create-only (`InvoiceCreated` /
+`LockedInvoiceCreated`) — Paid / Approved / Resolved still store + dedupe but do not advance it.
 
 ## Framework
 
