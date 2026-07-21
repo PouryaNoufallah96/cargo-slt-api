@@ -209,7 +209,8 @@ namespace SLT.Services._TransactionLog
                         UsdAmount = log.UsdAmount.ToString(),
                         log.UnLockTime,
                         LockDuration = log.LockDuration.ToString(),
-                        log.Approver
+                        log.Approver,
+                        log.EarnProfit
                     })
                 };
 

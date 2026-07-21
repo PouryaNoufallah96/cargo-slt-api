@@ -36,6 +36,7 @@ namespace SLT.Services._Order.DTOs.Results
         public DateTime? ActivateDate { get; set; } = null;
         public bool IsLocked { get; set; }
         public int? LockDurationMonths { get; set; }
+        public bool? EarnProfit { get; set; } = null;
         public string ApproverWallet { get; set; } = null;
         public OwnershipType OwnershipType { get; set; }
         public OrderType? Type { get; set; } = null;

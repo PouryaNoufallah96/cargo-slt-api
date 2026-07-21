@@ -62,6 +62,9 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket.DTOs
 
         [Parameter("address", "approver", 7, false)]
         public string Approver { get; set; }
+
+        [Parameter("bool", "earnProfit", 8, false)]
+        public bool EarnProfit { get; set; }
     }
 
     [Event("LockedInvoicePaid")]

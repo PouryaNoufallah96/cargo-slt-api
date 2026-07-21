@@ -55,10 +55,10 @@ namespace SLT.Services._Order
                 * 60
             - 1; // 253402300799
 
-        // Dev-test contracts use 1 minute as 1 lock month.
-        // private const long SecondsPerMonth = 60;
+        // Dev-test contracts use 1 minute as 1 lock month. Restore 2,592,000 before any prod delivery.
+        private const long SecondsPerMonth = 60;
         // 30 days * 24 hours * 60 minutes * 60 seconds = seconds in a 30-day month
-        private const long SecondsPerMonth = 30 * 24 * 60 * 60; // 2,592,000
+        // private const long SecondsPerMonth = 30 * 24 * 60 * 60; // 2,592,000
 
         /// <summary>
         /// use for create quick order
@@ -94,6 +94,7 @@ namespace SLT.Services._Order
 
             int lockDurationMonths = 0;
             string approverWallet = null;
+            bool? earnProfit = null;
 
             if (update.IsLocked)
             {
@@ -102,12 +103,14 @@ namespace SLT.Services._Order
                     update.ThirdPartyApprover,
                     walletAddress
                 );
+                earnProfit = ValidateEarnProfit(update.EarnProfit);
             }
             else
             {
                 ValidateNormalInvoiceHasNoLockFields(
                     update.LockDurationMonths,
-                    update.ThirdPartyApprover
+                    update.ThirdPartyApprover,
+                    update.EarnProfit
                 );
             }
 
@@ -121,7 +124,8 @@ namespace SLT.Services._Order
                     tokenData,
                     update.IsLocked,
                     lockDurationMonths,
-                    approverWallet
+                    approverWallet,
+                    earnProfit
                 );
                 return ConvertToReslut(
                     new List<InvoiceResult> { invoiceResult },
@@ -155,6 +159,7 @@ namespace SLT.Services._Order
             bool isLocked = false,
             int lockDurationMonths = 0,
             string approverWallet = null,
+            bool? earnProfit = null,
             DateOnly? dateOnly = null
         )
         {
@@ -183,7 +188,9 @@ namespace SLT.Services._Order
                 TokenAmountAtPayment = null,
                 TokenAmountWeiAtPayment = null,
                 TokenPriceAtPayment = null,
-                Lock = isLocked ? CreateLockDetail(true, lockDurationMonths, approverWallet) : null,
+                Lock = isLocked
+                    ? CreateLockDetail(true, lockDurationMonths, approverWallet, earnProfit.Value)
+                    : null,
             };
 
             await _invoiceRepository.InsertOneAsync(newInvoice);
@@ -209,12 +216,16 @@ namespace SLT.Services._Order
                 );
 
             string approverWallet = null;
+            bool? earnProfit = null;
 
             if (update.IsLocked)
+            {
                 approverWallet = ValidateThirdPartyApprover(
                     update.ThirdPartyApprover,
                     walletAddress
                 );
+                earnProfit = ValidateEarnProfit(update.EarnProfit);
+            }
             else
                 ValidateNormalMultiStepOrderHasNoLockFields(update);
 
@@ -251,7 +262,8 @@ namespace SLT.Services._Order
                     newOrder,
                     update.Invoices,
                     update.IsLocked,
-                    approverWallet
+                    approverWallet,
+                    earnProfit
                 );
 
                 return ConvertToReslut(invoiceResults, newOrder, OwnershipType.Owner);
@@ -278,7 +290,8 @@ namespace SLT.Services._Order
             Order order,
             List<MultiStepInvoiceUpdate> invoiceUpdates,
             bool isLocked,
-            string approverWallet
+            string approverWallet,
+            bool? earnProfit
         )
         {
             if (invoiceUpdates == null || !invoiceUpdates.Any())
@@ -324,7 +337,8 @@ namespace SLT.Services._Order
                         ? CreateLockDetail(
                             true,
                             invoiceUpdate.LockDurationMonths.Value,
-                            approverWallet
+                            approverWallet,
+                            earnProfit.Value
                         )
                         : null,
                 };
@@ -561,6 +575,29 @@ namespace SLT.Services._Order
                 );
                 SentrySdk.CaptureMessage(
                     $"LockedInvoiceCreated draft mismatch: ApproverWallet, InvoiceId {invoice.InvoiceId}"
+                );
+                return new LockedInvoiceSyncResult
+                {
+                    Changed = false,
+                    InvoiceId = invoice.InvoiceId,
+                    OrderId = invoice.OrderId,
+                    OwnerWallet = invoice.OwnerWallet,
+                    LockState = invoice.Lock.State,
+                    InvoiceState = invoice.State,
+                };
+            }
+
+            if (invoice.Lock.EarnProfit != log.EarnProfit)
+            {
+                _logger.LogError(
+                    "LockedInvoiceCreated draft mismatch. Field: EarnProfit, InvoiceId: {InvoiceId}, Expected: {Expected}, Actual: {Actual}, Hash: {Hash}",
+                    invoice.InvoiceId,
+                    invoice.Lock.EarnProfit,
+                    log.EarnProfit,
+                    log.Hash
+                );
+                SentrySdk.CaptureMessage(
+                    $"LockedInvoiceCreated draft mismatch: EarnProfit, InvoiceId {invoice.InvoiceId}"
                 );
                 return new LockedInvoiceSyncResult
                 {
@@ -1618,6 +1655,24 @@ namespace SLT.Services._Order
                 invoice.InvoiceId,
                 invoice.TokenNetwork
             );
+
+            if (!chainInvoice.Exists || !chainInvoice.IsLocked)
+            {
+                _logger.LogWarning(
+                    "GetLockedInvoice live snapshot ignored | InvoiceId: {InvoiceId}, Exists: {Exists}, IsLocked: {IsLocked}",
+                    invoice.InvoiceId,
+                    chainInvoice.Exists,
+                    chainInvoice.IsLocked
+                );
+                return ConvertToInvoiceDetailResult(
+                    invoice,
+                    type,
+                    invoice.TokenAmountAtPayment ?? 0,
+                    invoice.TokenAmountWeiAtPayment,
+                    isCallerAuthorizedApprover
+                );
+            }
+
             var tokenData = ValidateToken(invoice.TokenSymbol);
             var principalAmount = _blockChainService.ConvertFromWei(
                 chainInvoice.PayAmount,
@@ -1629,11 +1684,6 @@ namespace SLT.Services._Order
                 tokenData.PriceDecimalPlaces
             );
             var livePayoutPreviewWei = chainInvoice.StakedPayout.ToString();
-            var profitClaimed = _blockChainService.ConvertFromWei(
-                chainInvoice.ProfitClaimed,
-                tokenData.PriceDecimalPlaces
-            );
-            var profitClaimedWei = chainInvoice.ProfitClaimed.ToString();
             DateTime? lockedUntilMoment =
                 chainInvoice.LockedUntil <= BigInteger.Zero
                 || chainInvoice.LockedUntil > MaxUnixSeconds
@@ -1658,8 +1708,6 @@ namespace SLT.Services._Order
 
             invoice.Lock.LivePayoutPreview = livePayoutPreview;
             invoice.Lock.LivePayoutPreviewWei = livePayoutPreviewWei;
-            invoice.Lock.ProfitClaimed = profitClaimed;
-            invoice.Lock.ProfitClaimedWei = profitClaimedWei;
             invoice.Lock.Approved = chainInvoice.Approved;
             invoice.Lock.Settled = chainInvoice.Settled;
             invoice.Lock.LockedUntilMoment = lockedUntilMoment;
@@ -1969,7 +2017,8 @@ namespace SLT.Services._Order
         private static LockDetail CreateLockDetail(
             bool isLocked,
             int lockDurationMonths,
-            string approverWallet
+            string approverWallet,
+            bool earnProfit
         )
         {
             if (!isLocked)
@@ -1978,17 +2027,31 @@ namespace SLT.Services._Order
             return new LockDetail
             {
                 DurationMonths = lockDurationMonths,
+                EarnProfit = earnProfit,
                 ApproverWallet = approverWallet,
                 State = LockState.Created,
             };
         }
 
+        private static bool ValidateEarnProfit(bool? earnProfit)
+        {
+            if (!earnProfit.HasValue)
+                throw new BadRequestException("Earn profit is required for locked invoices.");
+
+            return earnProfit.Value;
+        }
+
         private static string ValidateNormalInvoiceHasNoLockFields(
             int? lockDurationMonths,
-            string thirdPartyApprover
+            string thirdPartyApprover,
+            bool? earnProfit
         )
         {
-            if (lockDurationMonths.HasValue || !string.IsNullOrWhiteSpace(thirdPartyApprover))
+            if (
+                lockDurationMonths.HasValue
+                || !string.IsNullOrWhiteSpace(thirdPartyApprover)
+                || earnProfit.HasValue
+            )
                 throw new BadRequestException("Lock fields are only valid for locked invoices.");
 
             return null;
@@ -2002,6 +2065,9 @@ namespace SLT.Services._Order
                 throw new BadRequestException(
                     "Third party approver is only valid for locked orders."
                 );
+
+            if (update.EarnProfit.HasValue)
+                throw new BadRequestException("Earn profit is only valid for locked orders.");
 
             if (update.Invoices.Any(i => i.LockDurationMonths.HasValue))
                 throw new BadRequestException("Lock duration is only valid for locked orders.");
@@ -2044,6 +2110,7 @@ namespace SLT.Services._Order
                 ActivateDate = invoice.ActivateDate,
                 IsLocked = invoice.Lock != null,
                 LockDurationMonths = invoice.Lock?.DurationMonths,
+                EarnProfit = invoice.Lock?.EarnProfit,
                 ApproverWallet = invoice.Lock?.ApproverWallet,
                 OwnershipType = type,
                 LockState = invoice.Lock?.State,
@@ -2105,6 +2172,7 @@ namespace SLT.Services._Order
                 ActivateDate = invoice.ActivateDate,
                 IsLocked = true,
                 LockDurationMonths = invoice.Lock.DurationMonths,
+                EarnProfit = invoice.Lock.EarnProfit,
                 ApproverWallet = invoice.Lock.ApproverWallet,
                 OwnershipType = type,
                 LockState = invoice.Lock.State,
@@ -2134,6 +2202,9 @@ namespace SLT.Services._Order
         private decimal? GetMonthlyProfitPercent(Invoice invoice)
         {
             if (invoice.Lock == null)
+                return null;
+
+            if (invoice.Lock.EarnProfit == false)
                 return null;
 
             return _stakeSetting

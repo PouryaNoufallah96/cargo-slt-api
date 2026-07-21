@@ -44,6 +44,7 @@ namespace SLT.Services._TransactionLog.DTOs
         public DateTime? UnLockTime { get; set; }
         public BigInteger LockDuration { get; set; }
         public string Approver { get; set; }
+        public bool EarnProfit { get; set; }
 
         public string Address { get; set; }
         public string Hash { get; set; }
