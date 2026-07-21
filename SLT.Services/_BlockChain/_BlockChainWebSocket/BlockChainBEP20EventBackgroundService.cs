@@ -610,10 +610,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 _lastEventReceived = DateTime.UtcNow;
 
-                lock (_blockLock)
-                {
-                    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
-                }
+                //lock (_blockLock)
+                //{
+                //    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
+                //}
             }
             catch (Exception ex)
             {
@@ -648,10 +648,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 _lastEventReceived = DateTime.UtcNow;
 
-                lock (_blockLock)
-                {
-                    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
-                }
+                //lock (_blockLock)
+                //{
+                //    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
+                //}
             }
             catch (Exception ex)
             {
@@ -688,10 +688,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 
                 _lastEventReceived = DateTime.UtcNow;
 
-                lock (_blockLock)
-                {
-                    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
-                }
+                //lock (_blockLock)
+                //{
+                //    _invoiceLastProcessedBlock = BigInteger.Max(_invoiceLastProcessedBlock, log.BlockNumber.Value + 1);
+                //}
             }
             catch (Exception ex)
             {
