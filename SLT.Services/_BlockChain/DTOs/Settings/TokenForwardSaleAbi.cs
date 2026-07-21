@@ -160,6 +160,11 @@
                 "name": "approver",
                 "type": "address",
                 "internalType": "address"
+              },
+              {
+                "name": "earnProfit",
+                "type": "bool",
+                "internalType": "bool"
               }
             ],
             "outputs": [],
@@ -170,34 +175,46 @@
             "name": "createOrderedLockedInvoice",
             "inputs": [
               {
-                "name": "ids",
-                "type": "bytes32[]",
-                "internalType": "bytes32[]"
+                "name": "input",
+                "type": "tuple",
+                "internalType": "struct InvoiceLib.OrderedLockedInvoiceInput",
+                "components": [
+                  {
+                    "name": "ids",
+                    "type": "bytes32[]",
+                    "internalType": "bytes32[]"
+                  },
+                  {
+                    "name": "tokens",
+                    "type": "address[]",
+                    "internalType": "address[]"
+                  },
+                  {
+                    "name": "usdAmounts",
+                    "type": "uint256[]",
+                    "internalType": "uint256[]"
+                  },
+                  {
+                    "name": "unlockTimes",
+                    "type": "uint256[]",
+                    "internalType": "uint256[]"
+                  },
+                  {
+                    "name": "lockDurations",
+                    "type": "uint256[]",
+                    "internalType": "uint256[]"
+                  },
+                  {
+                    "name": "approvers",
+                    "type": "address[]",
+                    "internalType": "address[]"
+                  }
+                ]
               },
               {
-                "name": "tokens",
-                "type": "address[]",
-                "internalType": "address[]"
-              },
-              {
-                "name": "usdAmounts",
-                "type": "uint256[]",
-                "internalType": "uint256[]"
-              },
-              {
-                "name": "unlockTimes",
-                "type": "uint256[]",
-                "internalType": "uint256[]"
-              },
-              {
-                "name": "lockDurations",
-                "type": "uint256[]",
-                "internalType": "uint256[]"
-              },
-              {
-                "name": "approvers",
-                "type": "address[]",
-                "internalType": "address[]"
+                "name": "earnProfit",
+                "type": "bool",
+                "internalType": "bool"
               }
             ],
             "outputs": [],
@@ -291,6 +308,11 @@
                     "internalType": "bool"
                   },
                   {
+                    "name": "earnProfit",
+                    "type": "bool",
+                    "internalType": "bool"
+                  },
+                  {
                     "name": "approver",
                     "type": "address",
                     "internalType": "address"
@@ -307,11 +329,6 @@
                   },
                   {
                     "name": "stakedPayout",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                  },
-                  {
-                    "name": "profitClaimed",
                     "type": "uint256",
                     "internalType": "uint256"
                   },
@@ -456,6 +473,12 @@
                 "type": "address",
                 "indexed": false,
                 "internalType": "address"
+              },
+              {
+                "name": "earnProfit",
+                "type": "bool",
+                "indexed": false,
+                "internalType": "bool"
               }
             ],
             "anonymous": false

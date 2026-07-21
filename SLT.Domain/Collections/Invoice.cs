@@ -37,6 +37,7 @@ namespace SLT.Domain.Collections
     public class LockDetail
     {
         public int DurationMonths { get; set; }
+        public bool? EarnProfit { get; set; } = null;
         public string ApproverWallet { get; set; } = null;
         public DateTime? LockedUntilMoment { get; set; } = null;
         public DateTime? ApprovedMoment { get; set; } = null;

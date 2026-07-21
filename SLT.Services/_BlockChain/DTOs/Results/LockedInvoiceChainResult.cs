@@ -14,11 +14,11 @@ namespace SLT.Services._BlockChain.DTOs.Results
         public bool Paid { get; set; }
         public bool Exists { get; set; }
         public bool IsLocked { get; set; }
+        public bool EarnProfit { get; set; }
         public BigInteger LockDuration { get; set; }
         public string Approver { get; set; }
         public BigInteger LockedUntil { get; set; }
         public BigInteger StakedPayout { get; set; }
-        public BigInteger ProfitClaimed { get; set; }
         public bool Approved { get; set; }
         public bool Settled { get; set; }
     }

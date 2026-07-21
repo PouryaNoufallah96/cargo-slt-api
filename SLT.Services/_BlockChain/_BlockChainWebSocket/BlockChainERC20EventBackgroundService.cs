@@ -543,8 +543,8 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                 var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
 
                 _logger.LogInformation(
-                    "{Prefix} LockedInvoiceCreated received | InvoiceId: {InvoiceId}, Creator: {Creator}, Token: {Token}, UsdAmount: {UsdAmount}, LockDuration: {LockDuration}, Approver: {Approver}, UnlockDate: {UnlockDate}, Block: {Block}, Hash: {Hash}",
-                    InvoiceLogPrefix, invoiceId, eLog.Event.Creator, eLog.Event.Token, eLog.Event.UsdAmount, eLog.Event.LockDuration, eLog.Event.Approver, unlockDate, log.BlockNumber, log.TransactionHash);
+                    "{Prefix} LockedInvoiceCreated received | InvoiceId: {InvoiceId}, Creator: {Creator}, Token: {Token}, UsdAmount: {UsdAmount}, LockDuration: {LockDuration}, Approver: {Approver}, EarnProfit: {EarnProfit}, UnlockDate: {UnlockDate}, Block: {Block}, Hash: {Hash}",
+                    InvoiceLogPrefix, invoiceId, eLog.Event.Creator, eLog.Event.Token, eLog.Event.UsdAmount, eLog.Event.LockDuration, eLog.Event.Approver, eLog.Event.EarnProfit, unlockDate, log.BlockNumber, log.TransactionHash);
 
                 await _transactionLogService.CreateLockedInvoiceCreatedAsync(
                     new _TransactionLog.DTOs.LockedInvoiceCreatedLog
@@ -559,6 +559,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
                         UnLockTime = unlockDate,
                         LockDuration = eLog.Event.LockDuration,
                         Approver = eLog.Event.Approver,
+                        EarnProfit = eLog.Event.EarnProfit,
                         EventType = Domain.Collections.BlockchainEventType.LockedInvoiceCreated,
                         Network = NetworkName
                     });

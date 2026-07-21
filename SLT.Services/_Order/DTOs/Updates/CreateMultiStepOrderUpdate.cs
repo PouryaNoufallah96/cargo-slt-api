@@ -7,6 +7,7 @@ namespace SLT.Services._Order.DTOs.Updates
         public string Transportation { get; set; }
         public decimal TotalAmount { get; set; }
         public bool IsLocked { get; set; }
+        public bool? EarnProfit { get; set; }
         [StringInputValidation(isRequired: false, maxLength: 42)] public string ThirdPartyApprover { get; set; }
         public List<MultiStepInvoiceUpdate> Invoices { get; set; }
     }

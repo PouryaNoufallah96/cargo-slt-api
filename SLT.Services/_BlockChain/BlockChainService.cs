@@ -87,20 +87,20 @@ namespace SLT.Services._BlockChain
             [Parameter("bool", "isLocked", 9)]
             public bool IsLocked { get; set; }
 
-            [Parameter("address", "approver", 10)]
+            [Parameter("bool", "earnProfit", 10)]
+            public bool EarnProfit { get; set; }
+
+            [Parameter("address", "approver", 11)]
             public string Approver { get; set; }
 
-            [Parameter("uint256", "lockDuration", 11)]
+            [Parameter("uint256", "lockDuration", 12)]
             public BigInteger LockDuration { get; set; }
 
-            [Parameter("uint256", "lockedUntil", 12)]
+            [Parameter("uint256", "lockedUntil", 13)]
             public BigInteger LockedUntil { get; set; }
 
-            [Parameter("uint256", "stakedPayout", 13)]
+            [Parameter("uint256", "stakedPayout", 14)]
             public BigInteger StakedPayout { get; set; }
-
-            [Parameter("uint256", "profitClaimed", 14)]
-            public BigInteger ProfitClaimed { get; set; }
 
             [Parameter("bool", "approved", 15)]
             public bool Approved { get; set; }
@@ -660,11 +660,11 @@ namespace SLT.Services._BlockChain
                     Paid = result.Invoice.Paid,
                     Exists = result.Invoice.Exists,
                     IsLocked = result.Invoice.IsLocked,
+                    EarnProfit = result.Invoice.EarnProfit,
                     LockDuration = result.Invoice.LockDuration,
                     Approver = result.Invoice.Approver,
                     LockedUntil = result.Invoice.LockedUntil,
                     StakedPayout = result.Invoice.StakedPayout,
-                    ProfitClaimed = result.Invoice.ProfitClaimed,
                     Approved = result.Invoice.Approved,
                     Settled = result.Invoice.Settled
                 };
