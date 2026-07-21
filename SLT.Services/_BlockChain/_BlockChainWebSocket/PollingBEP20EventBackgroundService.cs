@@ -368,7 +368,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	        {
 	            try
 	            {
-	                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+	                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
 	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 	                var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
@@ -412,7 +412,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	        {
 	            try
 	            {
-	                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+	                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
 	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 	                var lockedUntil = ConvertUnixSecondsToDateTime(eLog.Event.LockedUntil);
@@ -437,10 +437,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	                    }
 	                );
 
-	                lock (_blockLock)
-	                {
-	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
-	                }
+	                //lock (_blockLock)
+	                //{
+	                //    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                //}
 	            }
 	            catch (Exception ex)
 	            {
@@ -453,7 +453,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	        {
 	            try
 	            {
-	                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+	                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
 	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
@@ -474,10 +474,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	                    }
 	                );
 
-	                lock (_blockLock)
-	                {
-	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
-	                }
+	                //lock (_blockLock)
+	                //{
+	                //    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                //}
 	            }
 	            catch (Exception ex)
 	            {
@@ -490,7 +490,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	        {
 	            try
 	            {
-	                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+	                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
 	                var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
@@ -513,10 +513,10 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
 	                    }
 	                );
 
-	                lock (_blockLock)
-	                {
-	                    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
-	                }
+	                //lock (_blockLock)
+	                //{
+	                //    _lastinvoiceProcessedBlock = BigInteger.Max(_lastinvoiceProcessedBlock, log.BlockNumber.Value + 1);
+	                //}
 	            }
 	            catch (Exception ex)
 	            {
@@ -573,16 +573,16 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-        private async Task EnsureInvoiceEventCursorIncludesLockedEventsAsync()
-        {
-            var combinedBlock = await _transactionLogService.GetCombinedInvoiceEventLastCheckedBlockNumberAsync(NetworkName);
+        //private async Task EnsureInvoiceEventCursorIncludesLockedEventsAsync()
+        //{
+        //    var combinedBlock = await _transactionLogService.GetCombinedInvoiceEventLastCheckedBlockNumberAsync(NetworkName);
 
-            lock (_blockLock)
-            {
-                if (_lastinvoiceProcessedBlock < combinedBlock)
-                    _lastinvoiceProcessedBlock = combinedBlock;
-            }
-        }
+        //    lock (_blockLock)
+        //    {
+        //        if (_lastinvoiceProcessedBlock < combinedBlock)
+        //            _lastinvoiceProcessedBlock = combinedBlock;
+        //    }
+        //}
 
         private static DateTime? ConvertUnixSecondsToDateTime(BigInteger? unixSeconds)
         {

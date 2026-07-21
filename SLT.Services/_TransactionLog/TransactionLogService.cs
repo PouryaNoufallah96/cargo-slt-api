@@ -492,15 +492,15 @@ namespace SLT.Services._TransactionLog
             var lastBlock = await _transactionLogRepository
              .AsQueryable()
              .Where(q => q.Network == network)
-             .Where(h => h.EventType == BlockchainEventType.InvoiceCreated)
-             .OrderByDescending(b => b)
+             .Where(h => h.EventType == BlockchainEventType.InvoiceCreated || h.EventType == BlockchainEventType.LockedInvoiceCreated)
+             .OrderByDescending(b => b.BlockNumber)
              .FirstOrDefaultAsync();
             if (lastBlock == null)
             {
                 return BigInteger.Zero;
             }
 
-            return new BigInteger(lastBlock.BlockNumber);
+            return new BigInteger(lastBlock.BlockNumber - 20);
         }
 
         public async Task<BigInteger> GetCombinedInvoiceEventLastCheckedBlockNumberAsync(string network)

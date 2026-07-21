@@ -13,7 +13,7 @@ namespace SLT.Services._TransactionLog
         Task CreateLockedInvoiceApprovedAsync(LockedInvoiceApprovedLog log);
         Task CreateLockedInvoiceResolvedAsync(LockedInvoiceResolvedLog log);
         Task<BigInteger> GetInvoiceLastCheckedBlockNumberAsync(string network);
-        Task<BigInteger> GetCombinedInvoiceEventLastCheckedBlockNumberAsync(string network);
+        //Task<BigInteger> GetCombinedInvoiceEventLastCheckedBlockNumberAsync(string network);
 
 
 

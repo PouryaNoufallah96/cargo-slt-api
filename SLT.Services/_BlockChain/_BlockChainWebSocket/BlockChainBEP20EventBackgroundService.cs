@@ -539,7 +539,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
-                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
                 var unlockDate = ConvertUnixSecondsToDateTime(eLog.Event.UnlockTime);
@@ -584,7 +584,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
-                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
                 var lockedUntil = ConvertUnixSecondsToDateTime(eLog.Event.LockedUntil);
@@ -626,7 +626,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
-                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
@@ -664,7 +664,7 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
         {
             try
             {
-                await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
+                //await EnsureInvoiceEventCursorIncludesLockedEventsAsync();
 
                 var invoiceId = ByteArray32ToHex(eLog.Event.InvoiceId);
 
@@ -743,16 +743,16 @@ namespace SLT.Services._BlockChain._BlockChainWebSocket
             }
         }
 
-        private async Task EnsureInvoiceEventCursorIncludesLockedEventsAsync()
-        {
-            var combinedBlock = await _transactionLogService.GetCombinedInvoiceEventLastCheckedBlockNumberAsync(NetworkName);
+        //private async Task EnsureInvoiceEventCursorIncludesLockedEventsAsync()
+        //{
+        //    var combinedBlock = await _transactionLogService.GetCombinedInvoiceEventLastCheckedBlockNumberAsync(NetworkName);
 
-            lock (_blockLock)
-            {
-                if (_invoiceLastProcessedBlock < combinedBlock)
-                    _invoiceLastProcessedBlock = combinedBlock;
-            }
-        }
+        //    lock (_blockLock)
+        //    {
+        //        if (_invoiceLastProcessedBlock < combinedBlock)
+        //            _invoiceLastProcessedBlock = combinedBlock;
+        //    }
+        //}
 
         #endregion
 
