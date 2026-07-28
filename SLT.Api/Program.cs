@@ -44,11 +44,11 @@ builder.Services.AddSignalR().AddJsonProtocol(options =>
 builder.WebHost.UseSentry(o =>
 {
     o.Dsn = "https://e8dd66209d116e6ea99535cf7b48c071@o4510492345368576.ingest.de.sentry.io/4510815780667472";
-    o.TracesSampleRate = 1.0;
+    o.TracesSampleRate = 0;
     o.AttachStacktrace = true;
-    o.SendDefaultPii = true;
-    o.Debug = true;
-    o.IncludeActivityData = true;
+    o.SendDefaultPii = false;
+    o.Debug = false;
+    o.IncludeActivityData = false;
 });
 
 
